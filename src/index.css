@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-black text-zinc-300 font-['Inter'];
+    background-image: radial-gradient(circle at 50% 0%, rgba(236, 72, 153, 0.05) 0%, transparent 50%);
+  }
+  
+  h1, h2, h3, h4, h5, h6, .heading-font {
+    @apply font-['Bebas_Neue'] tracking-widest uppercase;
+  }
+}
+
+/* Hide scrollbar for clean cinematic areas */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
