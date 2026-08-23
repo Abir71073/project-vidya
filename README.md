@@ -27,6 +27,31 @@ This project is built using modern frontend technologies:
 *   **[Framer Motion](https://www.framer.com/motion/)** - High-performance Animations
 *   **[React Markdown](https://github.com/remarkjs/react-markdown)** - Markdown rendering with KaTeX support
 
+## 📂 File Structure
+
+```text
+vidya-ai/
+├── src/
+│   ├── components/
+│   │   ├── Assistant.tsx        # Persistent AI chat terminal
+│   │   ├── DoubtSolver.tsx      # Multimodal doubt resolution interface
+│   │   ├── Layout.tsx           # Main application layout and sidebar
+│   │   ├── LoadingScreen.tsx    # Cinematic entry sequence 
+│   │   ├── NotesManager.tsx     # Notes extraction and markdown structuring
+│   │   ├── QuizGenerator.tsx    # Quiz configuration and generation
+│   │   ├── QuizView.tsx         # Interactive quiz taking interface
+│   │   └── Research.tsx         # In-depth research module
+│   ├── App.tsx                  # Main router and page transitions
+│   ├── index.css                # Global styles and custom scrollbar CSS
+│   ├── main.tsx                 # React DOM entry point
+│   └── types.ts                 # Global TypeScript interfaces
+├── .env.example                 # Example environment variables (API keys)
+├── package.json                 # Project metadata and dependencies
+├── tailwind.config.js           # Tailwind CSS configuration
+├── tsconfig.json                # TypeScript compiler options
+└── vite.config.ts               # Vite bundler configuration
+```
+
 ## 🚀 Getting Started
 
 Follow these instructions to set up the project locally on your machine.
