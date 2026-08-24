@@ -54,10 +54,14 @@ const preprocessImage = (dataUrl: string): Promise<string> => {
   });
 };
 
-export default function DoubtSolver() {
+interface DoubtSolverProps {
+  language: string;
+  onLanguageChange: (lang: string) => void;
+}
+
+export default function DoubtSolver({ language, onLanguageChange }: DoubtSolverProps) {
   const [image, setImage] = useState<string | null>(null);
   const [textQuery, setTextQuery] = useState('');
-  const [language, setLanguage] = useState('English');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<DoubtResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +181,7 @@ export default function DoubtSolver() {
             <div className="flex items-center gap-2">
               <select 
                 value={language}
-                onChange={(e) => setLanguage(e.target.value)}
+                onChange={(e) => onLanguageChange(e.target.value)}
                 className="flex-1 rounded-none border border-zinc-800 p-3 text-[10px] font-bold tracking-widest uppercase focus:ring-1 focus:ring-pink-500 focus:border-pink-500 bg-black text-zinc-300 outline-none cursor-pointer"
               >
                 <option value="English">English</option>
@@ -218,9 +222,9 @@ export default function DoubtSolver() {
             </div>
           </div>
 
-          {response?.verificationStatus === 'failed' && response.verificationDetails && (
-            <div className="mb-4 p-3 bg-red-950/30 rounded-none text-[10px] uppercase tracking-wider text-red-400 border border-red-900/50">
-              <span className="font-bold">Note:</span> Symbolic check failed ({response.verificationDetails}).
+          {response?.verificationStatus === 'failed' && (
+            <div className="mb-4 p-3 bg-zinc-950/30 rounded-none text-[10px] uppercase tracking-wider text-zinc-400 border border-zinc-900/50">
+              <span className="font-bold">Note:</span> Solution could not be symbolically verified.
             </div>
           )}
           

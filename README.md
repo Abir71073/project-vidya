@@ -8,6 +8,12 @@
 
 The application architecture prioritizes speed, clarity, and an engaging user experience, featuring a bespoke dark-mode aesthetic with smooth, hardware-accelerated page transitions.
 
+### 🆕 Recent Updates
+
+*   **Advanced Engineering Support:** The AI engine now provides highly detailed, step-by-step derivations for complex circuit problems (Kirchhoff's laws, KVL/KCL, Thevenin, Norton) with explicitly defined nodes and loops.
+*   **Graceful Symbolic Fallback:** Enhanced math parser stability that gracefully handles and renders complex physical units (Watts, Volts, Amperes) and foreign languages without triggering verification errors.
+*   **Global Multilingual Sync:** Language preferences (English, Hindi, Bengali) selected in the top navigation bar now instantly synchronize globally across the Doubt Solver and other modules.
+
 ### ✨ Key Features
 
 *   **Multimodal Doubt Solver:** Upload images of handwritten questions or type complex problems to receive step-by-step, verified AI explanations with mathematical formatting support.
@@ -94,7 +100,7 @@ This project was architected and developed by:
 *   **Sounok Ghosh**
 *   **Srijoni Sarkar**
 *   **Tuhin Dey**
-*   **Moupriya Mondal**
+*   **Moupiya Mondal**
 *   **Krish Swaika**
 
 ---

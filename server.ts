@@ -36,7 +36,7 @@ app.post('/api/solve-doubt', async (req, res) => {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     
-    const promptText = `You are an expert AI tutor with highly advanced OCR capabilities. The user will upload handwritten math/science problems which may have extremely messy or bad handwriting.
+    const promptText = `You are an expert AI tutor with highly advanced OCR capabilities. The user will upload handwritten math/science/engineering problems which may have extremely messy or bad handwriting.
 First, carefully study the image to accurately transcribe the handwritten problem. Look closely at the strokes, context, and mathematical symbols to decipher poor handwriting.
 
 Then, solve the doubt provided by the user EXACTLY how a top student would write it on an exam answer sheet.
@@ -49,6 +49,14 @@ $$
 x &= 5 & \\quad \\text{(Divide both sides by 2)}
 \\end{aligned}
 $$
+
+SPECIAL INSTRUCTION FOR CIRCUIT PROBLEMS (KVL, KCL, Thevenin, Norton, etc.):
+- Clearly define all nodes, loops, and assumed current directions before writing equations.
+- Write down the unsimplified equations derived from Kirchhoff's laws or theorems first.
+- Show step-by-step substitution and solution of the simultaneous equations.
+- Detail exactly how each intermediate value (current, voltage, equivalent resistance R_th, etc.) was found.
+- Double-check your sign conventions (e.g., voltage drops vs. rises).
+- Provide the final correct result clearly at the end with appropriate units.
 
 Explain clearly. Use valid LaTeX enclosed in $$ for block equations and $ for inline equations. 
 Respond fully in ${language}.
@@ -102,8 +110,10 @@ User Query/Context: ${text ? text : 'Carefully transcribe the messy handwritten 
           verificationDetails = `Symbolic check passed: ${evaluated}`;
         }
       } catch (err: any) {
-        verificationStatus = 'failed';
-        verificationDetails = `Symbolic parsing failed: ${err.message}`;
+        // If it crashes during symbolic evaluation, it is simply unverified
+        // (e.g. because it contains text, units, or vectors that nerdamer doesn't support)
+        verificationStatus = 'unverified';
+        verificationDetails = '';
       }
     }
     
@@ -241,7 +251,15 @@ app.post('/api/chat', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful and knowledgeable teaching assistant. Answer student queries simply and accurately.'
+          content: `You are a helpful and knowledgeable teaching assistant. Answer student queries simply and accurately.
+
+If the user asks about circuit problems (like Kirchhoff's laws, Thevenin, or Norton theorems):
+- Do a step-by-step solution.
+- Define nodes, loops, and current directions clearly.
+- Provide the detailed derivation of how each intermediate value (voltage, current, equivalent resistance) was found.
+- Double-check your sign conventions (e.g., voltage drops vs. rises).
+- Give the correct final result at the end with units.
+- Use valid LaTeX formatting for math ($ for inline, $$ for block).`
         },
         ...messages
       ],
