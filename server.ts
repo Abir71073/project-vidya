@@ -80,102 +80,6 @@ app.post('/api/solve-doubt', async (req, res) => {
         .then((concept) => logAttempt(concept, 'explain', true))
         .catch((err) => console.error('Mistake-log classification failed:', err));
     }
-<<<<<<< HEAD
-=======
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
-    const promptText = `You are an expert AI tutor with highly advanced OCR capabilities. The user will upload handwritten math/science/engineering problems which may have extremely messy or bad handwriting.
-First, carefully study the image to accurately transcribe the handwritten problem. Look closely at the strokes, context, and mathematical symbols to decipher poor handwriting.
-
-Then, solve the doubt provided by the user EXACTLY how a top student would write it on an exam answer sheet.
-CRITICAL FORMATTING RULE: Every single mathematical step MUST have its reasoning or justification written on the right side of the step.
-Use LaTeX aligned blocks to achieve this layout. For example:
-$$
-\\begin{aligned}
-2x + 5 &= 15 & \\quad \\text{(Given equation)} \\\\
-2x &= 10 & \\quad \\text{(Subtract 5 from both sides)} \\\\
-x &= 5 & \\quad \\text{(Divide both sides by 2)}
-\\end{aligned}
-$$
-
-SPECIAL INSTRUCTION FOR CIRCUIT PROBLEMS (KVL, KCL, Thevenin, Norton, etc.):
-- Clearly define all nodes, loops, and assumed current directions before writing equations.
-- Write down the unsimplified equations derived from Kirchhoff's laws or theorems first.
-- Show step-by-step substitution and solution of the simultaneous equations.
-- Detail exactly how each intermediate value (current, voltage, equivalent resistance R_th, etc.) was found.
-- Double-check your sign conventions (e.g., voltage drops vs. rises).
-- Provide the final correct result clearly at the end with appropriate units.
-
-Explain clearly. Use valid LaTeX enclosed in $$ for block equations and $ for inline equations. 
-Respond fully in ${language}.
-If there is a final numerical or algebraic answer, include it at the very end in the format: 
-<FINAL_ANSWER> expression </FINAL_ANSWER>
-For algebraic expressions, keep it simple (e.g. x^2 + 2x).
-
-User Query/Context: ${text ? text : 'Carefully transcribe the messy handwritten problem in this image, then solve it step-by-step.'}`;
-
-    const parts: any[] = [
-      { text: promptText }
-    ];
-    
-    if (imageBase64) {
-      const match = imageBase64.match(/^data:(image\/\w+);base64,(.*)$/);
-      if (match) {
-        parts.push({
-          inlineData: {
-            mimeType: match[1],
-            data: match[2]
-          }
-        });
-      }
-    }
-
-    // Use Gemini for advanced OCR and solving
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: parts,
-      config: {
-        temperature: 0.2,
-        maxOutputTokens: 2048,
-      }
-    });
-
-    let explanation = response.text || '';
-    
-    // Answer Verification using nerdamer
-    let verificationStatus = 'unverified';
-    let verificationDetails = '';
-    const answerMatch = explanation.match(/<FINAL_ANSWER>\s*(.*?)\s*<\/FINAL_ANSWER>/);
-    
-    if (answerMatch && answerMatch[1]) {
-      const expression = answerMatch[1];
-      try {
-        // Basic check: Ensure it can be parsed and maybe simplified
-        // Nerdamer evaluates it symbolically. If it crashes, it's malformed.
-        const evaluated = nerdamer(expression).text();
-        if (evaluated) {
-          verificationStatus = 'verified';
-          verificationDetails = `Symbolic check passed: ${evaluated}`;
-        }
-      } catch (err: any) {
-        // If it crashes during symbolic evaluation, it is simply unverified
-        // (e.g. because it contains text, units, or vectors that nerdamer doesn't support)
-        verificationStatus = 'unverified';
-        verificationDetails = '';
-      }
-    }
-    
-    // Clean up tags
-    explanation = explanation.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    explanation = explanation.replace(/<FINAL_ANSWER>.*?<\/FINAL_ANSWER>/g, '').trim();
-
-    res.json({
-      explanation,
-      verificationStatus,
-      verificationDetails,
-    });
->>>>>>> 2713c39750ed0ef8b80a388462e86ca116c4e40a
   } catch (error: any) {
     console.error('Doubt solving error:', error);
     res.status(500).json({ error: error.message || 'Failed to process doubt' });
@@ -228,6 +132,13 @@ app.post('/api/doubt/hints', async (req, res) => {
     console.error('Hint generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate hints.' });
   }
+});
+
+// Local-only demo page: simulates sending a WhatsApp message and renders the
+// webhook's reply as chat bubbles, so this can be demoed without a real
+// WhatsApp number. See server/whatsapp/README.md for what is/isn't real here.
+app.get('/whatsapp-demo', (_req, res) => {
+  res.sendFile(path.join(process.cwd(), 'server', 'whatsapp', 'demo.html'));
 });
 
 // WhatsApp Cloud API webhook verification handshake — see server/whatsapp/README.md.

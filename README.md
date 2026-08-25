@@ -23,6 +23,7 @@ The application architecture prioritizes speed, clarity, and an engaging user ex
 *   **Subject Assistant:** A persistent, context-aware AI chat terminal for follow-up questions, conceptual clarification, and deep dives into syllabus topics.
 *   **Research Portal:** Search real academic papers (via the [Semantic Scholar](https://www.semanticscholar.org/) API) by topic, read abstracts and citation counts, open full text or PDFs, and bookmark papers for later.
 *   **Cinematic Interface:** A fully responsive, premium dark-mode UI built with immersive transitions, animated data feeds, and zero visual clutter.
+*   **WhatsApp Channel (local demo):** A backend webhook shaped like a real WhatsApp Cloud API integration, reusing the same Doubt Solver pipeline. Not connected to a real WhatsApp account — see [WHATSAPP.md](./WHATSAPP.md) and try it live at `/whatsapp-demo`.
 
 ## ⚠️ Known Limitations
 
@@ -30,6 +31,7 @@ The application architecture prioritizes speed, clarity, and an engaging user ex
 *   **PDF text extraction only, no OCR:** The Notes Vault reads embedded/selectable text from PDFs (via `pdf-parse`). Scanned or image-only PDFs have no extractable text and will return an error rather than silently producing empty notes. (Image-based handwritten questions *are* supported, but only through the separate Doubt Solver upload, which uses Gemini's vision model rather than `pdf-parse`.)
 *   **Long documents are truncated:** Extracted text longer than ~120,000 characters is truncated before being sent to the notes-processing model, to stay within LLM context limits. The response indicates when this happens.
 *   **Research search rate limits:** Without a Semantic Scholar API key (`S2_API_KEY`), the Research Portal shares a public, unauthenticated rate limit and may occasionally respond with "rate-limited, try again shortly" during heavy use.
+*   **WhatsApp channel is not live:** The WhatsApp webhook (`/api/whatsapp-webhook`) is a fully working backend implementation reusing the real Doubt Solver pipeline, but it is not connected to a real WhatsApp Business account — see [WHATSAPP.md](./WHATSAPP.md) for exactly what's stubbed and what going live would require.
 
 ## 🛠️ Built With
 

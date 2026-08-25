@@ -4,8 +4,22 @@ import { randomUUID } from 'crypto';
 import { solveDoubt } from '../doubt/solveDoubt';
 import { synthesizeNarration, getAudioDuration, voiceForLanguage } from '../video/tts';
 
-// See server/whatsapp/README.md for exactly what's stubbed here vs. what a
-// live integration additionally needs (Meta account, tokens, webhook hosting).
+// ============================================================================
+// NOT CONNECTED TO REAL WHATSAPP.
+// This is a working backend implementation of what a WhatsApp integration
+// would look like — it parses a payload shaped exactly like a real WhatsApp
+// Cloud API webhook and reuses the same solveDoubt() pipeline the web app
+// uses — but no message here ever touches Meta's servers or a real phone.
+// Try it via GET /whatsapp-demo, or see WHATSAPP.md / server/whatsapp/README.md
+// for exactly what's stubbed vs. what a live integration additionally needs:
+//   1. A Meta Business Platform developer account + WhatsApp Business
+//      Account (app review/approval can take days).
+//   2. A verified business phone number connected to that account.
+//   3. A permanent System User access token with whatsapp_business_messaging
+//      permission.
+//   4. A publicly hosted HTTPS URL for this webhook, registered with Meta
+//      and subscribed to the `messages` field.
+// ============================================================================
 
 interface IncomingMessage {
   from: string;
@@ -48,6 +62,22 @@ export function extractIncomingMessage(payload: WhatsAppWebhookPayload): Incomin
   return { from: message.from, text, imageBase64 };
 }
 
+// WhatsApp has no language picker like the website's ENG/HIN/BEN header buttons —
+// the incoming message's own script is the only signal available. This locks the
+// reply to that language via the exact same 'language' pass-through solveDoubt()
+// already uses for the website (Gemini is instructed to respond entirely in
+// whatever language string it's given), so a Hindi or Bengali message gets a
+// Hindi or Bengali reply using the identical locking logic, just detected instead
+// of manually selected. Detection is a lightweight Unicode-script check, not a
+// full language classifier — sufficient because solveDoubt() only supports these
+// three languages. An image-only message (no text) can't be detected before OCR
+// runs inside solveDoubt(), so it falls back to English, same as before.
+function detectLanguage(text: string): string {
+  if (/[ঀ-৿]/.test(text)) return 'Bengali'; // Bengali Unicode block
+  if (/[ऀ-ॿ]/.test(text)) return 'Hindi'; // Devanagari Unicode block
+  return 'English';
+}
+
 /** Strips markdown/LaTeX formatting that doesn't render in a plain WhatsApp text message. */
 function toPlainText(explanation: string): string {
   return explanation
@@ -76,7 +106,8 @@ export interface WhatsAppOutboundMessage {
  * this stub has no real credentials to actually send them).
  */
 export async function handleIncomingDoubt(message: IncomingMessage): Promise<WhatsAppOutboundMessage[]> {
-  const result = await solveDoubt({ imageBase64: message.imageBase64, text: message.text, language: 'English' });
+  const language = detectLanguage(message.text);
+  const result = await solveDoubt({ imageBase64: message.imageBase64, text: message.text, language });
   const plainText = toPlainText(result.explanation);
 
   const outbound: WhatsAppOutboundMessage[] = [
@@ -88,7 +119,7 @@ export async function handleIncomingDoubt(message: IncomingMessage): Promise<Wha
     await fs.mkdir(dir, { recursive: true });
     const id = randomUUID();
     const audioPath = path.join(dir, `${id}.mp3`);
-    await synthesizeNarration(plainText.slice(0, 1000), audioPath, voiceForLanguage('English'));
+    await synthesizeNarration(plainText.slice(0, 1000), audioPath, voiceForLanguage(language));
     await getAudioDuration(audioPath); // fails loudly if synthesis produced something unplayable
     outbound.push({
       messaging_product: 'whatsapp',

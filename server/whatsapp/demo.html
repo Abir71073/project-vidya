@@ -1,0 +1,293 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>WhatsApp Demo — Doubt Solver (not live)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #0b141a;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phone {
+    width: 420px; height: 100%; max-height: 780px;
+    display: flex; flex-direction: column;
+    background: #e5ddd5;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+  .banner {
+    background: #3a2a00; color: #ffcc66; font-size: 11px; line-height: 1.4;
+    padding: 8px 12px; text-align: center; border-bottom: 1px solid #5a4300;
+  }
+  .header {
+    background: #075E54; color: white; padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 15px;
+  }
+  .header .avatar {
+    width: 34px; height: 34px; border-radius: 50%; background: #128C7E;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .header .sub { font-size: 11px; font-weight: 400; color: #d9f5ee; }
+  .messages {
+    flex: 1; overflow-y: auto; padding: 16px 10px;
+    display: flex; flex-direction: column; gap: 8px;
+    background-image: linear-gradient(#e5ddd5, #e5ddd5);
+  }
+  .bubble {
+    max-width: 78%; padding: 8px 10px; border-radius: 8px;
+    font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.15);
+  }
+  .bubble.out { align-self: flex-end; background: #dcf8c6; border-top-right-radius: 0; }
+  .bubble.in { align-self: flex-start; background: #ffffff; border-top-left-radius: 0; }
+  .bubble.system { align-self: center; background: #fff3c4; color: #6b5900; font-size: 11.5px; text-align: center; }
+  .bubble img { max-width: 100%; border-radius: 4px; display: block; margin-top: 4px; }
+  .bubble audio { margin-top: 6px; width: 220px; }
+  .bubble .meta { font-size: 10px; color: #8a8a8a; margin-top: 4px; text-align: right; }
+  .typing { align-self: flex-start; background: #fff; padding: 10px 14px; border-radius: 8px; border-top-left-radius: 0; }
+  .typing span {
+    display: inline-block; width: 6px; height: 6px; margin: 0 1px; background: #999; border-radius: 50%;
+    animation: blink 1.2s infinite;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+  .composer {
+    display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    background: #f0f0f0; border-top: 1px solid #ddd;
+  }
+  .composer input[type="text"] {
+    flex: 1; border: none; border-radius: 20px; padding: 10px 14px;
+    font-size: 13.5px; outline: none;
+  }
+  .composer button, .composer label {
+    background: #075E54; color: white; border: none; border-radius: 50%;
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px; flex-shrink: 0;
+  }
+  .composer label { background: #128C7E; }
+  .composer input[type="file"] { display: none; }
+  .preview-strip {
+    padding: 6px 10px; background: #f0f0f0; font-size: 11px; color: #444;
+    display: none; align-items: center; gap: 8px;
+  }
+  .preview-strip.active { display: flex; }
+  .preview-strip img { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+  .preview-strip button { border: none; background: none; color: #b00; cursor: pointer; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="banner">
+    ⚠️ Demo only — this simulates an incoming WhatsApp message and posts it to this
+    server's own webhook. No real WhatsApp account or phone number is involved.
+  </div>
+  <div class="header">
+    <div class="avatar">🎓</div>
+    <div>
+      Vidya Doubt Solver
+      <div class="sub">simulated WhatsApp Business number</div>
+    </div>
+  </div>
+  <div class="messages" id="messages"></div>
+  <div class="preview-strip" id="previewStrip">
+    <img id="previewImg" />
+    <span id="previewLabel"></span>
+    <button id="clearImage">Remove</button>
+  </div>
+  <div class="composer">
+    <label for="imageInput">📷</label>
+    <input type="file" id="imageInput" accept="image/*" />
+    <input type="text" id="textInput" placeholder="Type a doubt, e.g. 2x + 5 = 15" />
+    <button id="sendBtn">➤</button>
+  </div>
+</div>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const textInput = document.getElementById('textInput');
+const imageInput = document.getElementById('imageInput');
+const previewStrip = document.getElementById('previewStrip');
+const previewImg = document.getElementById('previewImg');
+const previewLabel = document.getElementById('previewLabel');
+const clearImageBtn = document.getElementById('clearImage');
+const sendBtn = document.getElementById('sendBtn');
+
+// A stable fake sender id, shaped like a real WhatsApp wa_id (a phone number
+// with no leading +). This never contacts a real number.
+const DEMO_WA_ID = '910000' + Math.floor(100000 + Math.random() * 900000);
+
+let pendingImageBase64 = null;
+
+imageInput.addEventListener('change', () => {
+  const file = imageInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingImageBase64 = reader.result; // data:<mime>;base64,....
+    previewImg.src = pendingImageBase64;
+    previewLabel.textContent = file.name;
+    previewStrip.classList.add('active');
+  };
+  reader.readAsDataURL(file);
+});
+
+clearImageBtn.addEventListener('click', () => {
+  pendingImageBase64 = null;
+  imageInput.value = '';
+  previewStrip.classList.remove('active');
+});
+
+function addBubble(kind, contentEl) {
+  const div = document.createElement('div');
+  div.className = 'bubble ' + kind;
+  div.appendChild(contentEl);
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+function textNode(text) {
+  const span = document.createElement('div');
+  span.textContent = text;
+  return span;
+}
+
+function addSystemNote(text) {
+  const div = document.createElement('div');
+  div.className = 'bubble system';
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addTyping() {
+  const div = document.createElement('div');
+  div.className = 'bubble typing';
+  div.id = 'typingBubble';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typingBubble');
+  if (el) el.remove();
+}
+
+async function send() {
+  const text = textInput.value.trim();
+  const image = pendingImageBase64;
+  if (!text && !image) return;
+
+  // Render the outgoing bubble exactly as the user composed it.
+  const wrap = document.createElement('div');
+  if (image) {
+    const img = document.createElement('img');
+    img.src = image;
+    wrap.appendChild(img);
+  }
+  if (text) wrap.appendChild(textNode(text));
+  addBubble('out', wrap);
+
+  textInput.value = '';
+  const imageToSend = image;
+  pendingImageBase64 = null;
+  imageInput.value = '';
+  previewStrip.classList.remove('active');
+
+  // Build a payload shaped exactly like a real WhatsApp Cloud API incoming-
+  // message webhook — this is what extractIncomingMessage() in
+  // server/whatsapp/handleWebhook.ts parses.
+  const message = imageToSend
+    ? {
+        from: DEMO_WA_ID,
+        id: 'wamid.demo.' + Date.now(),
+        timestamp: String(Math.floor(Date.now() / 1000)),
+        type: 'image',
+        image: {
+          id: 'demo-media-id',
+          mime_type: (imageToSend.match(/^data:([^;]+);/) || [, 'image/jpeg'])[1],
+          base64: imageToSend.split(',')[1],
+        },
+      }
+    : {
+        from: DEMO_WA_ID,
+        id: 'wamid.demo.' + Date.now(),
+        timestamp: String(Math.floor(Date.now() / 1000)),
+        type: 'text',
+        text: { body: text },
+      };
+
+  const payload = {
+    object: 'whatsapp_business_account',
+    entry: [{
+      id: '0',
+      changes: [{
+        field: 'messages',
+        value: {
+          messaging_product: 'whatsapp',
+          metadata: { display_phone_number: '15550001111', phone_number_id: 'demo-phone-number-id' },
+          contacts: [{ profile: { name: 'Demo User' }, wa_id: DEMO_WA_ID }],
+          messages: [message],
+        },
+      }],
+    }],
+  };
+
+  addTyping();
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/whatsapp-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    removeTyping();
+
+    if (data.error) {
+      addSystemNote('Webhook error: ' + data.error);
+      return;
+    }
+
+    const wouldSend = data.wouldSend || [];
+    if (wouldSend.length === 0) {
+      addSystemNote('The webhook accepted the message but had nothing to reply with.');
+      return;
+    }
+
+    for (const msg of wouldSend) {
+      if (msg.type === 'text') {
+        addBubble('in', textNode(msg.text.body));
+      } else if (msg.type === 'audio') {
+        const wrap = document.createElement('div');
+        wrap.appendChild(textNode('🎙️ Voice note reply'));
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = msg.audio.link;
+        wrap.appendChild(audio);
+        addBubble('in', wrap);
+      }
+    }
+  } catch (err) {
+    removeTyping();
+    addSystemNote('Request failed: ' + err.message);
+  } finally {
+    sendBtn.disabled = false;
+  }
+}
+
+sendBtn.addEventListener('click', send);
+textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') send();
+});
+
+addSystemNote('This simulates an incoming WhatsApp message. Type a doubt or attach a photo of one, then send.');
+</script>
+</body>
+</html>

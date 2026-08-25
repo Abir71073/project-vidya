@@ -3,6 +3,7 @@ import { Section } from '../types';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import AccessibilityPanel from './AccessibilityPanel';
+import WhatsAppButton from './WhatsAppButton';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -154,6 +155,8 @@ export default function Layout({ children, currentSection, onNavigate, language,
           </div>
         </div>
       </main>
+
+      <WhatsAppButton starterMessage="Hi! I have a doubt I'd like help with." />
     </div>
   );
 }
