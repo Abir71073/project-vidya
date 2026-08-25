@@ -67,7 +67,7 @@ export default function LoadingScreen({ onComplete }: { onComplete: () => void }
              </p>
              <p className="text-zinc-300 font-bold uppercase tracking-widest text-[9px] md:text-xs max-w-4xl mx-auto leading-relaxed md:leading-loose">
                Abir Kumar Chakraborty <span className="text-pink-500 mx-2">&bull;</span> Sounok Ghosh <span className="text-pink-500 mx-2">&bull;</span> Srijoni Sarkar <br className="md:hidden" />
-               <span className="hidden md:inline text-pink-500 mx-2">&bull;</span> Tuhin Dey <span className="text-pink-500 mx-2">&bull;</span> Moupriya Mondal <span className="text-pink-500 mx-2">&bull;</span> Krish Swaika
+               <span className="hidden md:inline text-pink-500 mx-2">&bull;</span> Tuhin Dey <span className="text-pink-500 mx-2">&bull;</span> Moupiya Mondal <span className="text-pink-500 mx-2">&bull;</span> Krish Swaika
              </p>
           </motion.div>
         </motion.div>

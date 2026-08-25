@@ -8,6 +8,12 @@
 
 The application architecture prioritizes speed, clarity, and an engaging user experience, featuring a bespoke dark-mode aesthetic with smooth, hardware-accelerated page transitions.
 
+### 🆕 Recent Updates
+
+*   **Advanced Engineering Support:** The AI engine now provides highly detailed, step-by-step derivations for complex circuit problems (Kirchhoff's laws, KVL/KCL, Thevenin, Norton) with explicitly defined nodes and loops.
+*   **Graceful Symbolic Fallback:** Enhanced math parser stability that gracefully handles and renders complex physical units (Watts, Volts, Amperes) and foreign languages without triggering verification errors.
+*   **Global Multilingual Sync:** Language preferences (English, Hindi, Bengali) selected in the top navigation bar now instantly synchronize globally across the Doubt Solver and other modules.
+
 ### ✨ Key Features
 
 *   **Multimodal Doubt Solver:** Upload images of handwritten questions or type complex problems to receive step-by-step AI explanations with mathematical formatting support. Final numeric/algebraic answers are cross-checked with a symbolic math engine (nerdamer) and flagged as verified or unverified.
@@ -45,6 +51,31 @@ The application architecture prioritizes speed, clarity, and an engaging user ex
 *   **[Playwright](https://playwright.dev/)** (Chromium) - screenshots styled HTML slides for video explanations
 *   **[edge-tts](https://github.com/rany2/edge-tts)** - free neural text-to-speech narration (Python CLI)
 *   **[ffmpeg](https://ffmpeg.org/)** - stitches slide images + narration audio into the final MP4
+
+## 📂 File Structure
+
+```text
+vidya-ai/
+├── src/
+│   ├── components/
+│   │   ├── Assistant.tsx        # Persistent AI chat terminal
+│   │   ├── DoubtSolver.tsx      # Multimodal doubt resolution interface
+│   │   ├── Layout.tsx           # Main application layout and sidebar
+│   │   ├── LoadingScreen.tsx    # Cinematic entry sequence 
+│   │   ├── NotesManager.tsx     # Notes extraction and markdown structuring
+│   │   ├── QuizGenerator.tsx    # Quiz configuration and generation
+│   │   ├── QuizView.tsx         # Interactive quiz taking interface
+│   │   └── Research.tsx         # In-depth research module
+│   ├── App.tsx                  # Main router and page transitions
+│   ├── index.css                # Global styles and custom scrollbar CSS
+│   ├── main.tsx                 # React DOM entry point
+│   └── types.ts                 # Global TypeScript interfaces
+├── .env.example                 # Example environment variables (API keys)
+├── package.json                 # Project metadata and dependencies
+├── tailwind.config.js           # Tailwind CSS configuration
+├── tsconfig.json                # TypeScript compiler options
+└── vite.config.ts               # Vite bundler configuration
+```
 
 ## 🚀 Getting Started
 
@@ -90,7 +121,7 @@ This project was architected and developed by:
 *   **Sounok Ghosh**
 *   **Srijoni Sarkar**
 *   **Tuhin Dey**
-*   **Moupriya Mondal**
+*   **Moupiya Mondal**
 *   **Krish Swaika**
 
 ---

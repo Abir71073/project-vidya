@@ -8,9 +8,11 @@ interface LayoutProps {
   children: React.ReactNode;
   currentSection: Section;
   onNavigate: (section: Section) => void;
+  language: string;
+  onLanguageChange: (lang: string) => void;
 }
 
-export default function Layout({ children, currentSection, onNavigate }: LayoutProps) {
+export default function Layout({ children, currentSection, onNavigate, language, onLanguageChange }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -116,9 +118,24 @@ export default function Layout({ children, currentSection, onNavigate }: LayoutP
               {navItems.find(i => i.id === currentSection)?.label}
             </span>
             <div className="hidden lg:flex bg-zinc-900 p-1 rounded-none border border-zinc-800">
-              <button className="px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none bg-zinc-800 text-white shadow-sm border border-zinc-700">ENG</button>
-              <button className="px-3 py-1 text-[10px] font-bold tracking-widest uppercase text-zinc-500 hover:text-zinc-300">HIN</button>
-              <button className="px-3 py-1 text-[10px] font-bold tracking-widest uppercase text-zinc-500 hover:text-zinc-300">BEN</button>
+              <button 
+                onClick={() => onLanguageChange('English')}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'English' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+              >
+                ENG
+              </button>
+              <button 
+                onClick={() => onLanguageChange('Hindi')}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'Hindi' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+              >
+                HIN
+              </button>
+              <button 
+                onClick={() => onLanguageChange('Bengali')}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'Bengali' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+              >
+                BEN
+              </button>
             </div>
           </div>
 

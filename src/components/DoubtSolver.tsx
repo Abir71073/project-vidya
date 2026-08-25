@@ -63,11 +63,19 @@ const preprocessImage = (dataUrl: string): Promise<string> => {
   });
 };
 
+<<<<<<< HEAD
 export default function DoubtSolver() {
   const [mode, setMode] = useState<Mode>('explain');
+=======
+interface DoubtSolverProps {
+  language: string;
+  onLanguageChange: (lang: string) => void;
+}
+
+export default function DoubtSolver({ language, onLanguageChange }: DoubtSolverProps) {
+>>>>>>> 2713c39750ed0ef8b80a388462e86ca116c4e40a
   const [image, setImage] = useState<string | null>(null);
   const [textQuery, setTextQuery] = useState('');
-  const [language, setLanguage] = useState('English');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<DoubtResponse | null>(null);
   const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
@@ -564,12 +572,43 @@ export default function DoubtSolver() {
                     className="hidden"
                   />
 
+<<<<<<< HEAD
                   {pdfError && (
                     <div className="mt-2 p-2.5 bg-red-950/50 text-red-400 rounded-none text-[11px] border border-red-900/50 flex items-start font-medium">
                       <AlertTriangle className="w-3.5 h-3.5 mr-1.5 shrink-0 mt-0.5" />
                       <p>{pdfError}</p>
                     </div>
                   )}
+=======
+            <div className="flex items-center gap-2">
+              <select 
+                value={language}
+                onChange={(e) => onLanguageChange(e.target.value)}
+                className="flex-1 rounded-none border border-zinc-800 p-3 text-[10px] font-bold tracking-widest uppercase focus:ring-1 focus:ring-pink-500 focus:border-pink-500 bg-black text-zinc-300 outline-none cursor-pointer"
+              >
+                <option value="English">English</option>
+                <option value="Hindi">Hindi (हिंदी)</option>
+                <option value="Bengali">Bengali (বাংলা)</option>
+              </select>
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="flex-[2] bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white font-bold tracking-widest uppercase py-3 px-4 rounded-none text-xs transition-all disabled:opacity-50 flex items-center justify-center drop-shadow-[0_0_10px_rgba(236,72,153,0.5)]"
+              >
+                {loading ? 'Solving...' : 'Solve Doubt'}
+              </button>
+            </div>
+          </form>
+          
+          {error && (
+            <div className="mt-3 p-3 bg-red-950/50 text-red-400 rounded-none text-xs border border-red-900/50 flex items-start font-medium">
+              <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0" />
+              <p>{error}</p>
+            </div>
+          )}
+        </div>
+      </section>
+>>>>>>> 2713c39750ed0ef8b80a388462e86ca116c4e40a
 
                   {pdfQuestions && pdfQuestions.length > 0 && (
                     <div className="mt-2 border border-orange-500/40 bg-orange-500/5 p-3">
@@ -594,6 +633,7 @@ export default function DoubtSolver() {
                 </div>
               )}
 
+<<<<<<< HEAD
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">
                   {isGrade ? 'Extra Context (Optional, e.g. total marks)' : 'Additional Context (Optional)'}
@@ -604,6 +644,18 @@ export default function DoubtSolver() {
                   placeholder={isGrade ? 'e.g. "This question is worth 5 marks"' : 'Type here...'}
                   className="w-full rounded-none border border-zinc-800 p-3 text-xs focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none h-16 bg-black text-zinc-200 placeholder:text-zinc-700 transition-colors"
                 />
+=======
+          {response?.verificationStatus === 'failed' && (
+            <div className="mb-4 p-3 bg-zinc-950/30 rounded-none text-[10px] uppercase tracking-wider text-zinc-400 border border-zinc-900/50">
+              <span className="font-bold">Note:</span> Solution could not be symbolically verified.
+            </div>
+          )}
+          
+          <div className="flex-1 overflow-y-auto space-y-4 text-sm leading-relaxed pr-2 custom-scrollbar bg-black p-6 border border-zinc-900">
+            {!response && !loading && (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-700">
+                <p className="text-[10px] font-bold tracking-widest uppercase">Upload a doubt to see the explanation here.</p>
+>>>>>>> 2713c39750ed0ef8b80a388462e86ca116c4e40a
               </div>
 
               {!isGrade && (

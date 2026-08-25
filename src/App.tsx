@@ -31,15 +31,23 @@ const PageTransition = ({ children, sectionId }: { children: React.ReactNode, se
 export default function App() {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [initialLoading, setInitialLoading] = useState(true);
+  const [language, setLanguage] = useState('English');
 
   return (
     <>
       {initialLoading && <LoadingScreen onComplete={() => setInitialLoading(false)} />}
+<<<<<<< HEAD
 
       <Layout currentSection={currentSection} onNavigate={setCurrentSection}>
         <AnimatePresence mode="wait">
           {currentSection === 'home' && <PageTransition sectionId="home"><Home onNavigate={setCurrentSection} /></PageTransition>}
           {currentSection === 'doubt' && <PageTransition sectionId="doubt"><DoubtSolver /></PageTransition>}
+=======
+      
+      <Layout currentSection={currentSection} onNavigate={setCurrentSection} language={language} onLanguageChange={setLanguage}>
+        <AnimatePresence mode="wait">
+          {currentSection === 'doubt' && <PageTransition sectionId="doubt"><DoubtSolver language={language} onLanguageChange={setLanguage} /></PageTransition>}
+>>>>>>> 2713c39750ed0ef8b80a388462e86ca116c4e40a
           {currentSection === 'notes' && <PageTransition sectionId="notes"><NotesManager /></PageTransition>}
           {currentSection === 'quiz' && <PageTransition sectionId="quiz"><QuizGenerator /></PageTransition>}
           {currentSection === 'assistant' && <PageTransition sectionId="assistant"><Assistant /></PageTransition>}
