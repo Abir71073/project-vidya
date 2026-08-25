@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
+import { Send, User, Bot, Loader2, BookOpen } from 'lucide-react';
 import { ChatMessage } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -52,10 +52,16 @@ export default function Assistant() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-950/90 backdrop-blur-md rounded-none border border-zinc-800 overflow-hidden max-w-4xl mx-auto drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
-      <div className="p-4 border-b border-zinc-900 bg-black shrink-0">
-        <h2 className="text-xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase">Subject Assistant</h2>
-        <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Ask follow-up questions or clarify concepts.</p>
+    <div className="relative flex flex-col h-full bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 overflow-hidden max-w-4xl mx-auto shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_60px_-25px_rgba(0,0,0,0.9)]">
+      <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink z-10" />
+      <div className="p-4 border-b border-zinc-900 bg-black shrink-0 flex items-center gap-3">
+        <div className="w-9 h-9 shrink-0 bg-zinc-900 text-pink-500 border border-zinc-800 flex items-center justify-center shadow-[0_0_12px_-2px_rgba(236,72,153,0.3)]">
+          <BookOpen className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase">Subject Assistant</h2>
+          <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Ask follow-up questions or clarify concepts.</p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-overlay bg-black/40 relative">
@@ -75,9 +81,9 @@ export default function Assistant() {
                   {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                 </div>
                 
-                <div className={`p-4 rounded-none text-sm border ${
-                  msg.role === 'user' 
-                    ? 'bg-zinc-900 border-orange-500/50 text-white' 
+                <div className={`p-4 rounded-none text-sm border shadow-[0_12px_28px_-16px_rgba(0,0,0,0.9)] ${
+                  msg.role === 'user'
+                    ? 'bg-zinc-900 border-orange-500/50 text-white'
                     : 'bg-black border-pink-500/50 text-zinc-200'
                 }`}>
                   <div className="prose max-w-none prose-sm prose-invert prose-p:leading-relaxed prose-headings:font-['Bebas_Neue'] prose-headings:tracking-wider prose-headings:text-pink-400 prose-a:text-orange-400">
@@ -107,14 +113,14 @@ export default function Assistant() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-black border-t border-zinc-900 shrink-0">
+      <div className="p-4 bg-black border-t border-zinc-900 shrink-0 shadow-[0_-12px_28px_-20px_rgba(0,0,0,0.9)]">
         <form onSubmit={handleSubmit} className="relative flex items-center gap-3">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your question..."
-            className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-none text-sm focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none transition-shadow text-zinc-100 placeholder:text-zinc-600"
+            className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-none text-sm focus:ring-1 focus:ring-pink-500 focus:border-pink-500 outline-none transition-all text-zinc-100 placeholder:text-zinc-600"
           />
           <button
             type="submit"

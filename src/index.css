@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -6,10 +6,62 @@
     @apply bg-black text-zinc-300 font-['Inter'];
     background-image: radial-gradient(circle at 50% 0%, rgba(236, 72, 153, 0.05) 0%, transparent 50%);
   }
-  
+
   h1, h2, h3, h4, h5, h6, .heading-font {
     @apply font-['Bebas_Neue'] tracking-widest uppercase;
   }
+}
+
+/* ── Color-role system (interior screens only — landing screen is exempt) ──
+   pink   = primary interaction (submit buttons, active nav/tabs, selection)
+   orange = AI / intelligence (AI-generated content, explanations, insights)
+   cyan   = information (citations, metadata, counts, provenance — NOT AI-authored)
+   red    = errors only
+   Keep new UI within this palette; don't reach for an off-list color for emphasis. */
+
+/* Ambient two-tone glow for interior workspace surfaces — gives the flat
+   black panels a sense of depth without introducing new colors. */
+.ambient-surface {
+  background-color: #000;
+  background-image:
+    radial-gradient(circle at 15% -10%, rgba(236, 72, 153, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 100% 110%, rgba(249, 115, 22, 0.08) 0%, transparent 50%);
+}
+
+/* Faint technical/educational motif (grid + circuit-node dots) for large empty
+   surfaces (dashboard, empty states) — atmospheric, not distracting. */
+.atmosphere-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    radial-gradient(circle, rgba(236, 72, 153, 0.15) 1px, transparent 1px);
+  background-size: 40px 40px, 40px 40px, 120px 120px;
+  background-position: 0 0, 0 0, 20px 20px;
+}
+
+/* Thin gradient hairline used as a "premium panel" top accent, fading from
+   an accent color into nothing so panel edges don't read as flat lines. */
+.panel-accent-pink {
+  background-image: linear-gradient(to right, rgba(236, 72, 153, 0.9), rgba(236, 72, 153, 0.05), transparent);
+}
+.panel-accent-orange {
+  background-image: linear-gradient(to right, rgba(249, 115, 22, 0.9), rgba(249, 115, 22, 0.05), transparent);
+}
+
+/* Accessibility mode: swaps body copy to Lexend (a font designed to improve
+   reading proficiency) and loosens letter/line spacing — both commonly
+   recommended for dyslexic readers. Headings keep the brand display font;
+   this only affects body copy readability, not the visual identity. */
+html.a11y-dyslexia-font body {
+  font-family: 'Lexend', sans-serif;
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+}
+html.a11y-dyslexia-font p,
+html.a11y-dyslexia-font li,
+html.a11y-dyslexia-font span,
+html.a11y-dyslexia-font div {
+  font-family: 'Lexend', sans-serif;
 }
 
 /* Hide scrollbar for clean cinematic areas */

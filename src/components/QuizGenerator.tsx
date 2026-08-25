@@ -75,9 +75,10 @@ export default function QuizGenerator() {
 
   return (
     <div className="flex flex-col h-full items-center justify-center">
-      <div className="w-full max-w-2xl bg-zinc-950/90 backdrop-blur-md rounded-none border border-zinc-800 p-6 sm:p-8 flex flex-col drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
-        <div className="flex items-center gap-4 mb-8 border-b border-zinc-900 pb-4">
-          <div className="w-12 h-12 bg-zinc-900 text-pink-500 rounded-none flex items-center justify-center border border-zinc-800">
+      <div className="relative w-full max-w-2xl bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 p-6 sm:p-8 flex flex-col shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_60px_-25px_rgba(0,0,0,0.9)]">
+        <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink" />
+        <div className="flex items-center gap-4 mb-8 pb-4 border-b border-zinc-900">
+          <div className="w-12 h-12 bg-zinc-900 text-pink-500 rounded-none flex items-center justify-center border border-zinc-800 shadow-[0_0_14px_-2px_rgba(236,72,153,0.35)]">
             <BrainCircuit className="w-6 h-6" />
           </div>
           <div>

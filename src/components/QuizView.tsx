@@ -36,12 +36,17 @@ export default function QuizView({ quiz, onBack }: QuizViewProps) {
   };
 
   if (finished) {
+    const pct = Math.round((score / quiz.questions.length) * 100);
     return (
-      <div className="bg-zinc-950/90 backdrop-blur-md rounded-none border border-zinc-800 p-8 text-center max-w-md mx-auto mt-12 flex flex-col items-center drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
+      <div className="relative bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 p-8 text-center max-w-md mx-auto mt-12 flex flex-col items-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_60px_-25px_rgba(0,0,0,0.9)]">
+        <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink" />
         <h2 className="text-4xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase mb-2 drop-shadow-[0_0_10px_rgba(236,72,153,0.3)]">Quiz Complete!</h2>
-        <p className="text-sm font-bold text-pink-500 mb-8 uppercase tracking-widest">You scored {score} out of {quiz.questions.length}</p>
-        
-        <button 
+        <p className="text-sm font-bold text-pink-500 mb-4 uppercase tracking-widest">You scored {score} out of {quiz.questions.length}</p>
+        <div className="w-full h-1.5 bg-zinc-900 border border-zinc-800 mb-8 overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-pink-500 to-orange-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]" style={{ width: `${pct}%` }} />
+        </div>
+
+        <button
           onClick={onBack}
           className="w-full px-4 py-4 bg-gradient-to-r from-pink-600 to-orange-500 hover:from-pink-500 hover:to-orange-400 text-white rounded-none text-xs font-bold uppercase tracking-widest transition-all drop-shadow-[0_0_10px_rgba(236,72,153,0.4)]"
         >
@@ -52,8 +57,9 @@ export default function QuizView({ quiz, onBack }: QuizViewProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto bg-zinc-950/90 backdrop-blur-md rounded-none border border-zinc-800 overflow-hidden flex flex-col h-full drop-shadow-[0_0_20px_rgba(0,0,0,0.8)]">
-      <div className="p-3 sm:p-4 border-b border-zinc-900 flex items-center justify-between bg-black shrink-0">
+    <div className="max-w-2xl mx-auto bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 overflow-hidden flex flex-col h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_60px_-25px_rgba(0,0,0,0.9)]">
+      <div className="p-3 sm:p-4 border-b border-zinc-900 flex items-center justify-between bg-black shrink-0 relative">
+        <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink" />
         <button 
           onClick={onBack}
           className="flex items-center text-zinc-500 hover:text-pink-500 transition-colors text-[10px] uppercase font-bold tracking-widest"

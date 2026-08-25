@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Section } from './types';
 import Layout from './components/Layout';
+import Home from './components/Home';
 import DoubtSolver from './components/DoubtSolver';
 import NotesManager from './components/NotesManager';
 import QuizGenerator from './components/QuizGenerator';
@@ -28,15 +29,16 @@ const PageTransition = ({ children, sectionId }: { children: React.ReactNode, se
 );
 
 export default function App() {
-  const [currentSection, setCurrentSection] = useState<Section>('doubt');
+  const [currentSection, setCurrentSection] = useState<Section>('home');
   const [initialLoading, setInitialLoading] = useState(true);
 
   return (
     <>
       {initialLoading && <LoadingScreen onComplete={() => setInitialLoading(false)} />}
-      
+
       <Layout currentSection={currentSection} onNavigate={setCurrentSection}>
         <AnimatePresence mode="wait">
+          {currentSection === 'home' && <PageTransition sectionId="home"><Home onNavigate={setCurrentSection} /></PageTransition>}
           {currentSection === 'doubt' && <PageTransition sectionId="doubt"><DoubtSolver /></PageTransition>}
           {currentSection === 'notes' && <PageTransition sectionId="notes"><NotesManager /></PageTransition>}
           {currentSection === 'quiz' && <PageTransition sectionId="quiz"><QuizGenerator /></PageTransition>}
