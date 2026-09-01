@@ -1,4 +1,7 @@
-export type Section = 'home' | 'doubt' | 'notes' | 'quiz' | 'assistant' | 'research';
+export type Section = 'home' | 'profile' | 'assessment' | 'learning' | 'dashboard' | 'admin' | 'assistant'
+  // Legacy K-12 sections — unlinked from nav during the MoSPI pivot (see SECURITY.md / README),
+  // kept only so their routes/components still compile; not reachable via navigation.
+  | 'doubt' | 'notes' | 'quiz' | 'research';
 
 export interface DoubtResponse {
   explanation: string;
@@ -53,6 +56,8 @@ export interface QuizQuestion {
   options: string[];
   correctAnswer: number;
   explanation: string;
+  /** Which competency (server/competency/taxonomy.ts) this question tests, when the quiz is a competency assessment. */
+  competencyId?: string;
 }
 
 export interface Quiz {

@@ -1,18 +1,29 @@
-import { useState } from 'react';
-import { Quiz } from '../types';
+import { useState, useRef } from 'react';
+import { Quiz, QuizQuestion } from '../types';
 import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+
+export interface QuizAnswerRecord {
+  question: QuizQuestion;
+  selectedIndex: number;
+  correct: boolean;
+}
 
 interface QuizViewProps {
   quiz: Quiz;
   onBack: () => void;
+  /** Additive: reports the full per-question breakdown when the quiz finishes, so a
+   *  caller (e.g. CompetencyAssessment.tsx) can tally results per competencyId without
+   *  QuizView itself needing to know anything about competencies. */
+  onComplete?: (result: { score: number; total: number; answers: QuizAnswerRecord[] }) => void;
 }
 
-export default function QuizView({ quiz, onBack }: QuizViewProps) {
+export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const answersRef = useRef<QuizAnswerRecord[]>([]);
 
   const question = quiz.questions[currentQuestion];
 
@@ -20,7 +31,9 @@ export default function QuizView({ quiz, onBack }: QuizViewProps) {
     if (showExplanation) return;
     setSelectedOption(index);
     setShowExplanation(true);
-    if (index === question.correctAnswer) {
+    const correct = index === question.correctAnswer;
+    answersRef.current.push({ question, selectedIndex: index, correct });
+    if (correct) {
       setScore(s => s + 1);
     }
   };
@@ -32,6 +45,7 @@ export default function QuizView({ quiz, onBack }: QuizViewProps) {
       setShowExplanation(false);
     } else {
       setFinished(true);
+      onComplete?.({ score, total: quiz.questions.length, answers: answersRef.current });
     }
   };
 

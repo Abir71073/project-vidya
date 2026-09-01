@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "vidya-skill-intelligence-platform",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -23,6 +23,7 @@
     "mammoth": "^1.12.1",
     "motion": "^12.43.0",
     "nerdamer": "^1.1.13",
+    "officeparser": "^7.8.0",
     "pdf-parse": "^1.1.1",
     "pdf-to-img": "^5.0.0",
     "pdfjs-dist": "^5.4.624",

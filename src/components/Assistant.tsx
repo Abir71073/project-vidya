@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Assistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: 'Hello! I am your AI subject assistant. What topic would you like to discuss today?' }
+    { role: 'assistant', content: 'Hello! I can help with questions about competencies, courses, or how this platform works. What would you like to know?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,8 +59,8 @@ export default function Assistant() {
           <BookOpen className="w-4 h-4" />
         </div>
         <div>
-          <h2 className="text-xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase">Subject Assistant</h2>
-          <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Ask follow-up questions or clarify concepts.</p>
+          <h2 className="text-xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase">Learner Support</h2>
+          <p className="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Ask about competencies, courses, or the platform itself.</p>
         </div>
       </div>
 

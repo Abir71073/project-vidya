@@ -7,12 +7,13 @@ import { useState } from 'react';
 import { Section } from './types';
 import Layout from './components/Layout';
 import Home from './components/Home';
-import DoubtSolver from './components/DoubtSolver';
-import NotesManager from './components/NotesManager';
-import QuizGenerator from './components/QuizGenerator';
 import Assistant from './components/Assistant';
-import Research from './components/Research';
 import LoadingScreen from './components/LoadingScreen';
+import LearnerProfilePage from './components/LearnerProfile';
+import CompetencyAssessment from './components/CompetencyAssessment';
+import LearningPaths from './components/LearningPaths';
+import EmployeeDashboard from './components/EmployeeDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import { AnimatePresence, motion } from 'motion/react';
 
 const PageTransition = ({ children, sectionId }: { children: React.ReactNode, sectionId: string }) => (
@@ -31,20 +32,20 @@ const PageTransition = ({ children, sectionId }: { children: React.ReactNode, se
 export default function App() {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [initialLoading, setInitialLoading] = useState(true);
-  const [language, setLanguage] = useState('English');
 
   return (
     <>
       {initialLoading && <LoadingScreen onComplete={() => setInitialLoading(false)} />}
 
-      <Layout currentSection={currentSection} onNavigate={setCurrentSection} language={language} onLanguageChange={setLanguage}>
+      <Layout currentSection={currentSection} onNavigate={setCurrentSection}>
         <AnimatePresence mode="wait">
           {currentSection === 'home' && <PageTransition sectionId="home"><Home onNavigate={setCurrentSection} /></PageTransition>}
-          {currentSection === 'doubt' && <PageTransition sectionId="doubt"><DoubtSolver language={language} onLanguageChange={setLanguage} /></PageTransition>}
-          {currentSection === 'notes' && <PageTransition sectionId="notes"><NotesManager /></PageTransition>}
-          {currentSection === 'quiz' && <PageTransition sectionId="quiz"><QuizGenerator /></PageTransition>}
+          {currentSection === 'profile' && <PageTransition sectionId="profile"><LearnerProfilePage /></PageTransition>}
+          {currentSection === 'assessment' && <PageTransition sectionId="assessment"><CompetencyAssessment /></PageTransition>}
+          {currentSection === 'learning' && <PageTransition sectionId="learning"><LearningPaths /></PageTransition>}
+          {currentSection === 'dashboard' && <PageTransition sectionId="dashboard"><EmployeeDashboard /></PageTransition>}
+          {currentSection === 'admin' && <PageTransition sectionId="admin"><AdminDashboard /></PageTransition>}
           {currentSection === 'assistant' && <PageTransition sectionId="assistant"><Assistant /></PageTransition>}
-          {currentSection === 'research' && <PageTransition sectionId="research"><Research /></PageTransition>}
         </AnimatePresence>
       </Layout>
     </>

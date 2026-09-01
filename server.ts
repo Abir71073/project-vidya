@@ -20,6 +20,10 @@ import { askAboutEntity } from './server/diagram/askAboutEntity';
 import { extractIncomingMessage, handleIncomingDoubt } from './server/whatsapp/handleWebhook';
 import { logAttempt, findRecurringStruggle, getDashboardStats } from './server/mistakes/store';
 import { classifyConcept, generatePracticeNudge } from './server/mistakes/practiceNudge';
+import * as competencyStore from './server/competency/store';
+import { COMPETENCIES, JOB_ROLES, getExpectedLevels } from './server/competency/taxonomy';
+import { recommendCoursesForGaps, getCoursesForCompetency } from './server/competency/catalogue';
+import { extractDocumentText } from './server/materials/extractDocumentText';
 
 // Attempt to load nerdamer extensions if available
 try {
@@ -471,15 +475,15 @@ app.post('/api/chat', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: `You are a helpful and knowledgeable teaching assistant. Answer student queries simply and accurately.
+          content: `You are the Learner Support assistant for a Skill Intelligence & Learning Platform used by officials in India's Official Statistical System (MoSPI, NSSO, State DES offices, and similar bodies).
 
-If the user asks about circuit problems (like Kirchhoff's laws, Thevenin, or Norton theorems):
-- Do a step-by-step solution.
-- Define nodes, loops, and current directions clearly.
-- Provide the detailed derivation of how each intermediate value (voltage, current, equivalent resistance) was found.
-- Double-check your sign conventions (e.g., voltage drops vs. rises).
-- Give the correct final result at the end with units.
-- Use valid LaTeX formatting for math ($ for inline, $$ for block).`
+Answer questions about:
+- The 33 competencies tracked by the platform, across four domains: Statistical (Survey Design, Sampling, National Accounts, Price Statistics, Labour Statistics, Agricultural Statistics, Industrial Statistics, SDG Indicators, Metadata Standards, Data Quality Frameworks), Technical (Python, R, SQL, Stata, SPSS, SAS, GIS, Data Visualization, AI/ML, Cloud Computing, APIs, Open Data), Digital Governance (Cybersecurity, Data Privacy, Digital Signatures, Government Cloud, Digital Public Infrastructure), and Behavioural/Managerial (Leadership, Communication, Project Management, Ethics, Decision Making, Change Management).
+- How competency assessments, skill-gap analysis, and course recommendations work on this platform.
+- General questions about official statistics concepts within these competency areas (e.g. explaining what a sampling frame is, or what the DPDP Act requires).
+- How to navigate the platform itself (Learner Profile, Assessment, Learning Paths, Dashboard).
+
+If asked about live iGOT Karmayogi or NSSTA course enrolment, be upfront that this platform's course catalogue is a demo/mock integration, not connected to the real iGOT Karmayogi or NSSTA systems (see WHATSAPP.md-style honesty elsewhere in this app). Keep answers concise and practical. Use valid LaTeX formatting for any math ($ for inline, $$ for block).`
         },
         ...messages
       ],
@@ -537,6 +541,300 @@ app.get('/api/research', async (req, res) => {
   } catch (error: any) {
     console.error('Research search error:', error);
     res.status(500).json({ error: 'Failed to search research papers. Please try again.' });
+  }
+});
+
+// ============================================================================
+// MoSPI Skill Intelligence & Learning Platform — competency routes (SIH26101).
+// See server/competency/store.ts for the prototype-storage caveat and
+// SECURITY.md for what a production deployment still needs.
+// ============================================================================
+
+app.get('/api/learners', async (_req, res) => {
+  try {
+    const learners = await competencyStore.listLearners();
+    res.json({ learners });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to list learners' });
+  }
+});
+
+app.get('/api/learners/:id', async (req, res) => {
+  try {
+    const learner = await competencyStore.getLearner(req.params.id);
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+    res.json({ learner });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load learner' });
+  }
+});
+
+app.post('/api/learners', async (req, res) => {
+  try {
+    const { name, designation, department, jobRole, currentAssignment, qualifications, workExperienceYears, priorTrainings, role, language } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'Name is required.' });
+    }
+    if (role !== 'employee' && role !== 'administrator') {
+      return res.status(400).json({ error: 'Role must be "employee" or "administrator".' });
+    }
+    const learner = await competencyStore.createLearner({
+      name: String(name).trim(),
+      designation: String(designation || '').trim(),
+      department: String(department || '').trim(),
+      jobRole: String(jobRole || '').trim(),
+      currentAssignment: String(currentAssignment || '').trim(),
+      qualifications: String(qualifications || '').trim(),
+      workExperienceYears: Number(workExperienceYears) || 0,
+      priorTrainings: Array.isArray(priorTrainings) ? priorTrainings.filter((t: any) => typeof t === 'string' && t.trim()) : [],
+      role,
+      language: String(language || 'English'),
+    });
+    res.json({ learner });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create learner' });
+  }
+});
+
+// Written to by the header's ENG/HIN/BEN toggle (Layout.tsx) — the active
+// learner's `language` field is the single source of truth every AI-generated
+// piece of content (assessments, material-based quizzes) reads, via
+// activeLearner.language in LearnerContext.
+app.patch('/api/learners/:id/language', async (req, res) => {
+  try {
+    const { language } = req.body;
+    if (!['English', 'Hindi', 'Bengali'].includes(language)) {
+      return res.status(400).json({ error: 'language must be English, Hindi, or Bengali.' });
+    }
+    const learner = await competencyStore.updateLearnerLanguage(req.params.id, language);
+    if (!learner) return res.status(404).json({ error: 'Learner not found' });
+    res.json({ learner });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update language' });
+  }
+});
+
+app.get('/api/competency/job-roles', (_req, res) => {
+  res.json({ jobRoles: JOB_ROLES });
+});
+
+app.get('/api/competency/taxonomy', (_req, res) => {
+  res.json({ competencies: COMPETENCIES });
+});
+
+app.get('/api/competency/scores/:learnerId', async (req, res) => {
+  try {
+    const scores = await competencyStore.getLearnerScores(req.params.learnerId);
+    res.json({ scores });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load scores' });
+  }
+});
+
+app.get('/api/competency/gaps/:learnerId', async (req, res) => {
+  try {
+    const gaps = await competencyStore.computeGaps(req.params.learnerId);
+    res.json({ gaps });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to compute gaps' });
+  }
+});
+
+// Section 4 — extracts text from an uploaded document/presentation for the
+// material-based assessment flow. Reuses the shared extractor (with Gemini-vision
+// OCR fallback for scanned/handwritten PDF pages) that the (nav-dormant) Doubt
+// Solver's PDF parser also runs on — see server/materials/extractDocumentText.ts.
+app.post('/api/competency/extract-material', async (req, res) => {
+  try {
+    const { fileBase64, fileName = '', fileType = '' } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: 'No file provided' });
+
+    const base64Data = fileBase64.split(';base64,').pop();
+    if (!base64Data) return res.status(400).json({ error: 'Uploaded file looks corrupted. Please try a different file.' });
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ error: `"${fileName || 'File'}" is ${(buffer.length / (1024 * 1024)).toFixed(1)}MB, which is over the ${MAX_UPLOAD_MB}MB limit.` });
+    }
+    if (buffer.length === 0) return res.status(400).json({ error: 'The uploaded file is empty.' });
+
+    const result = await extractDocumentText(buffer, fileName, fileType);
+    if (!result.text.trim()) {
+      return res.status(422).json({ error: 'No text could be extracted from this file.' });
+    }
+
+    let text = result.text;
+    let truncated = false;
+    if (text.length > MAX_EXTRACTED_CHARS) {
+      text = text.slice(0, MAX_EXTRACTED_CHARS);
+      truncated = true;
+    }
+    res.json({ text, truncated, usedOcrFallback: result.usedOcrFallback });
+  } catch (error: any) {
+    console.error('Material extraction error:', error);
+    res.status(500).json({ error: error.message || 'Failed to extract text from file' });
+  }
+});
+
+// Rescoped version of /api/quiz (server.ts:336): same Groq call and JSON contract,
+// but the prompt is scoped to specific competencies instead of a free-text topic,
+// and each question is tagged with which competency it tests — so one assessment
+// session can cover several competencies at once and still yield a per-competency
+// score, not just one aggregate score (Section 2's explicit requirement).
+app.post('/api/competency/assess', async (req, res) => {
+  try {
+    const { competencyIds, language = 'English', questionsPerCompetency = 2, materialText } = req.body;
+    if (!Array.isArray(competencyIds) || competencyIds.length === 0) {
+      return res.status(400).json({ error: 'At least one competencyId is required.' });
+    }
+    const defs = competencyIds
+      .map((id: string) => COMPETENCIES.find((c) => c.id === id))
+      .filter((c: any) => c);
+    if (defs.length === 0) {
+      return res.status(400).json({ error: 'No valid competencyIds provided.' });
+    }
+
+    const groq = getGroq();
+    const competencyList = defs.map((c: any) => `- id: "${c.id}", name: "${c.name}", domain: "${c.domain}"`).join('\n');
+
+    const materialClause = materialText
+      ? `\n\nBase the questions on the following uploaded material where relevant to each competency (this is real training material provided by the user — mine it for actual content, don't just generate generic questions and ignore it):\n"""\n${String(materialText).slice(0, 12000)}\n"""`
+      : '';
+
+    const prompt = `Generate a competency assessment quiz for officials in India's Official Statistical System (MoSPI). Cover EXACTLY these competencies, ${questionsPerCompetency} question(s) each:
+${competencyList}${materialClause}
+
+Every question must be written entirely in ${language}, with correct grammar and correct native technical terminology (transliterate only internationally standard terms/symbols that have no ${language} equivalent).
+Each question must test real understanding of its specific competency (not a generic "what is X" question) and include exactly 4 options, one correct answer index (0-based), and a substantive explanation of why the correct answer is right.
+
+Return ONLY valid JSON with this exact structure, no prose outside the JSON:
+{
+  "title": "Short title for this assessment, in ${language}",
+  "questions": [
+    { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": 0, "explanation": "...", "competencyId": "one of the ids listed above" }
+  ]
+}`;
+
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'openai/gpt-oss-120b',
+      temperature: 0.4,
+      response_format: { type: 'json_object' },
+    });
+
+    const raw = completion.choices[0]?.message?.content || '{}';
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(502).json({ error: 'The assessment generator returned malformed output. Please try again.' });
+    }
+
+    const validIds = new Set(defs.map((c: any) => c.id));
+    const questions = (Array.isArray(parsed.questions) ? parsed.questions : []).filter(
+      (q: any) => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length === 4 && validIds.has(q.competencyId)
+    );
+
+    if (questions.length === 0) {
+      return res.status(502).json({ error: 'Could not generate a valid assessment for these competencies. Please try again.' });
+    }
+
+    res.json({ title: parsed.title || 'Competency Assessment', questions });
+  } catch (error: any) {
+    console.error('Competency assessment generation error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate assessment' });
+  }
+});
+
+app.post('/api/competency/score', async (req, res) => {
+  try {
+    const { learnerId, competencyId, score, source = 'assessment' } = req.body;
+    if (!learnerId || !competencyId || typeof score !== 'number') {
+      return res.status(400).json({ error: 'learnerId, competencyId, and numeric score are required.' });
+    }
+    const result = await competencyStore.recordCompetencyScore(learnerId, competencyId, Math.max(0, Math.min(100, score)), source);
+    res.json({ score: result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to record score' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Section 3 — mock iGOT Karmayogi / NSSTA course catalogue + enrolments.
+// See server/competency/catalogue.ts's header comment: this is a documented
+// mock, not a live integration.
+// ---------------------------------------------------------------------------
+
+app.get('/api/courses', (req, res) => {
+  const competencyId = String(req.query.competencyId || '');
+  if (!competencyId) return res.status(400).json({ error: 'competencyId query param is required.' });
+  res.json({ courses: getCoursesForCompetency(competencyId) });
+});
+
+app.get('/api/recommendations/:learnerId', async (req, res) => {
+  try {
+    const gaps = await competencyStore.computeGaps(req.params.learnerId);
+    const recommendations = recommendCoursesForGaps(gaps);
+    res.json({ recommendations });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to compute recommendations' });
+  }
+});
+
+app.get('/api/enrolments/:learnerId', async (req, res) => {
+  try {
+    const enrolments = await competencyStore.listEnrolments(req.params.learnerId);
+    res.json({ enrolments });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to list enrolments' });
+  }
+});
+
+app.post('/api/enrolments', async (req, res) => {
+  try {
+    const { learnerId, courseId } = req.body;
+    if (!learnerId || !courseId) return res.status(400).json({ error: 'learnerId and courseId are required.' });
+    const enrolment = await competencyStore.createEnrolment(learnerId, courseId);
+    res.json({ enrolment });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to create enrolment' });
+  }
+});
+
+app.patch('/api/enrolments/:id/complete', async (req, res) => {
+  try {
+    const enrolment = await competencyStore.completeEnrolment(req.params.id);
+    if (!enrolment) return res.status(404).json({ error: 'Enrolment not found' });
+    res.json({ enrolment });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to complete enrolment' });
+  }
+});
+
+app.get('/api/dashboard/employee/:learnerId', async (req, res) => {
+  try {
+    const data = await competencyStore.getEmployeeDashboardData(req.params.learnerId);
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load dashboard data' });
+  }
+});
+
+// Section 8 note: this is a prototype-scope route-level check only (the caller
+// asserts its own role from local, unauthenticated storage — see SECURITY.md).
+// A production version must verify the requester's role server-side against a
+// real authenticated identity, not trust a client-supplied learnerId's stored role.
+app.get('/api/dashboard/admin', async (req, res) => {
+  try {
+    const requesterId = String(req.query.requesterId || '');
+    const requester = requesterId ? await competencyStore.getLearner(requesterId) : null;
+    if (!requester || requester.role !== 'administrator') {
+      return res.status(403).json({ error: 'Administrator access required.' });
+    }
+    const data = await competencyStore.getAdminDashboardData();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load admin dashboard data' });
   }
 });
 

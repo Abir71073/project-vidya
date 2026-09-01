@@ -1,43 +1,20 @@
 import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
 import { pdf } from 'pdf-to-img';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { DetectedQuestion, PdfParseResult } from './types';
+import { extractPerPageText, transcribePageImage } from '../materials/extractDocumentText';
 
 // Below this many characters, a page's pdf-parse text layer is almost certainly
 // missing (a scanned page, or a handwritten page photographed into the PDF)
 // rather than real typed content — that page gets OCR'd via Gemini vision instead.
 // Detection runs PER PAGE, not per document, so a PDF that mixes typed and
 // handwritten pages is handled correctly rather than being judged as a whole.
+//
+// NOTE: this module's own UI/routes are unlinked from nav as part of the MoSPI
+// pivot (see the plan/README) — kept only because extractPerPageText and
+// transcribePageImage, now in server/materials/extractDocumentText.ts, power the
+// Section 4 material-upload flow. Everything below this line is otherwise dormant.
 const MIN_CHARS_PER_PAGE = 40;
-
-async function extractPerPageText(buffer: Buffer): Promise<string[]> {
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-  const doc = await loadingTask.promise;
-  const pageTexts: string[] = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items.map((item: any) => item.str || '').join(' ');
-    pageTexts.push(text.trim());
-  }
-  await doc.destroy();
-  return pageTexts;
-}
-
-async function transcribePageImage(imageBuffer: Buffer, ai: GoogleGenAI): Promise<string> {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.1-flash-lite',
-    contents: [
-      {
-        text: 'Transcribe ALL text, questions, and math/science content visible in this image exactly as written. This page may be handwritten or typed, in English, Hindi, or Bengali (Devanagari/Bengali script) — do your best OCR on messy handwriting, and preserve the ORIGINAL language and script exactly. Do NOT translate. Output plain transcribed text only, no commentary, no markdown formatting.',
-      },
-      { inlineData: { mimeType: 'image/png', data: imageBuffer.toString('base64') } },
-    ],
-    config: { temperature: 0.1, maxOutputTokens: 2048 },
-  });
-  return (response.text || '').trim();
-}
 
 async function splitIntoQuestions(combinedText: string): Promise<DetectedQuestion[]> {
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });

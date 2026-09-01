@@ -1,29 +1,41 @@
-import { BookOpen, HelpCircle, FileText, Menu, X, BrainCircuit, Library, LayoutDashboard, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, UserCircle2, ClipboardList, GraduationCap, BarChart3, ShieldCheck, Menu, X, LayoutDashboard, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { Section } from '../types';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import AccessibilityPanel from './AccessibilityPanel';
 import WhatsAppButton from './WhatsAppButton';
+import { useLearner } from '../context/LearnerContext';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentSection: Section;
   onNavigate: (section: Section) => void;
-  language: string;
-  onLanguageChange: (lang: string) => void;
 }
 
-export default function Layout({ children, currentSection, onNavigate, language, onLanguageChange }: LayoutProps) {
+export default function Layout({ children, currentSection, onNavigate }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { activeLearner, setLearnerLanguage } = useLearner();
+  // The active learner's profile is the single source of truth for language —
+  // every AI-generated piece of content (assessments, material-based quizzes)
+  // reads activeLearner.language directly. This toggle used to drive a separate,
+  // disconnected App-level `language` state that no MoSPI component actually
+  // read, which was the root cause of assessments silently ignoring it.
+  const language = activeLearner?.language || 'English';
 
+  // Sections are added here incrementally as each SIH26101 section is built
+  // (see the MoSPI pivot plan). Section 8 access control: the Admin item is
+  // hidden entirely for a non-administrator profile — the /admin route itself
+  // also re-checks the role server-side, so this is a UI convenience, not the
+  // actual security boundary (see SECURITY.md).
   const navItems: { id: Section; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Home', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'doubt', label: 'Doubt Solver', icon: <HelpCircle className="w-5 h-5" /> },
-    { id: 'notes', label: 'Notes Vault', icon: <FileText className="w-5 h-5" /> },
-    { id: 'quiz', label: 'Quiz Generator', icon: <BrainCircuit className="w-5 h-5" /> },
-    { id: 'assistant', label: 'Subject Assistant', icon: <BookOpen className="w-5 h-5" /> },
-    { id: 'research', label: 'Research', icon: <Library className="w-5 h-5" /> },
+    { id: 'profile', label: 'Learner Profile', icon: <UserCircle2 className="w-5 h-5" /> },
+    { id: 'assessment', label: 'Assessment', icon: <ClipboardList className="w-5 h-5" /> },
+    { id: 'learning', label: 'Learning Paths', icon: <GraduationCap className="w-5 h-5" /> },
+    { id: 'dashboard', label: 'My Dashboard', icon: <BarChart3 className="w-5 h-5" /> },
+    ...(activeLearner?.role === 'administrator' ? [{ id: 'admin' as Section, label: 'Admin Dashboard', icon: <ShieldCheck className="w-5 h-5" /> }] : []),
+    { id: 'assistant', label: 'Learner Support', icon: <BookOpen className="w-5 h-5" /> },
   ];
 
   return (
@@ -89,15 +101,18 @@ export default function Layout({ children, currentSection, onNavigate, language,
           )}
         </AnimatePresence>
 
-        {/* No real accounts yet — this is a static placeholder profile row that
-            also doubles as the settings entry point (expands AccessibilityPanel). */}
+        {/* No real accounts yet — reflects the active (simulated-login) learner
+            profile from LearnerContext, and also doubles as the settings entry
+            point (expands AccessibilityPanel). See SECURITY.md. */}
         <button
           onClick={() => setSettingsOpen((v) => !v)}
           className="p-4 border-t border-zinc-900 bg-black/60 flex items-center gap-3 hover:bg-zinc-900/60 transition-colors text-left"
         >
-          <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-[11px] font-bold text-white uppercase">S</div>
+          <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center text-[11px] font-bold text-white uppercase">
+            {activeLearner?.name.slice(0, 1) || '?'}
+          </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-zinc-200 truncate">Student</p>
+            <p className="text-xs font-bold text-zinc-200 truncate">{activeLearner?.name || 'No profile selected'}</p>
             <p className="text-[9px] text-zinc-600 uppercase tracking-widest">Settings &amp; Accessibility</p>
           </div>
           <Settings className="w-4 h-4 text-zinc-600 shrink-0" />
@@ -118,22 +133,25 @@ export default function Layout({ children, currentSection, onNavigate, language,
             <span className="lg:hidden font-['Bebas_Neue'] text-xl tracking-widest text-zinc-100">
               {navItems.find(i => i.id === currentSection)?.label}
             </span>
-            <div className="hidden lg:flex bg-zinc-900 p-1 rounded-none border border-zinc-800">
-              <button 
-                onClick={() => onLanguageChange('English')}
-                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'English' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+            <div className={`hidden lg:flex bg-zinc-900 p-1 rounded-none border border-zinc-800 ${!activeLearner ? 'opacity-40' : ''}`} title={!activeLearner ? 'Select a learner profile to set a language' : undefined}>
+              <button
+                onClick={() => setLearnerLanguage('English')}
+                disabled={!activeLearner}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors disabled:cursor-not-allowed ${language === 'English' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
               >
                 ENG
               </button>
-              <button 
-                onClick={() => onLanguageChange('Hindi')}
-                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'Hindi' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+              <button
+                onClick={() => setLearnerLanguage('Hindi')}
+                disabled={!activeLearner}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors disabled:cursor-not-allowed ${language === 'Hindi' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
               >
                 HIN
               </button>
-              <button 
-                onClick={() => onLanguageChange('Bengali')}
-                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors ${language === 'Bengali' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
+              <button
+                onClick={() => setLearnerLanguage('Bengali')}
+                disabled={!activeLearner}
+                className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-none transition-colors disabled:cursor-not-allowed ${language === 'Bengali' ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700' : 'text-zinc-500 hover:text-zinc-300 border border-transparent'}`}
               >
                 BEN
               </button>
