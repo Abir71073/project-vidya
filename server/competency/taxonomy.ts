@@ -101,6 +101,28 @@ const ROLE_OVERRIDES: Record<string, Record<string, number>> = {
 
 export const JOB_ROLES = Object.keys(DOMAIN_BASELINES);
 
+// ---------------------------------------------------------------------------
+// Departmental priorities — small hardcoded list per department, same
+// prototype-scope pattern as DOMAIN_BASELINES/ROLE_OVERRIDES above. Department
+// is free text on the profile form, not a fixed enum, so this table will not
+// have every possible value a user types — getDepartmentPriorities() always
+// returns an array (empty if unrecognized), never throws, so the recommendation
+// engine can call it unconditionally without checking existence first.
+const DEPARTMENT_PRIORITIES: Record<string, string[]> = {
+  'NSSO — Survey Design & Research': ['survey-design', 'sampling', 'data-quality-frameworks'],
+  'National Accounts Division': ['national-accounts', 'price-statistics', 'python'],
+  'Price Statistics Division': ['price-statistics', 'national-accounts', 'data-visualization'],
+  'SDG Monitoring Cell': ['sdg-indicators', 'metadata-standards', 'data-quality-frameworks'],
+  "Director General's Office": ['leadership', 'decision-making', 'change-management'],
+  'Directorate of Economics & Statistics, Bihar': ['agricultural-statistics', 'survey-design', 'gis'],
+};
+
+/** Priority competencyIds for a department, or [] if the department isn't in the table — never throws. */
+export function getDepartmentPriorities(department: string | undefined | null): string[] {
+  if (!department) return [];
+  return DEPARTMENT_PRIORITIES[department] || [];
+}
+
 /** Expected 0-100 level for one job role across all 33 competencies (baseline + signature overrides). */
 export function getExpectedLevels(jobRole: string): Record<string, number> {
   const baselines = DOMAIN_BASELINES[jobRole] || DOMAIN_BASELINES['ISS Probationer'];

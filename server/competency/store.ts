@@ -6,7 +6,7 @@ import {
   Enrolment, EnrolmentStatus, CompetencyDomain,
 } from './types';
 import { COMPETENCIES, getCompetency, getExpectedLevels } from './taxonomy';
-import { getCoursesForCompetency, getCourseById, recommendCoursesForGaps } from './catalogue';
+import { getCoursesForCompetency, getCourseById, recommendCourses } from './catalogue';
 
 const DOMAINS: CompetencyDomain[] = ['Statistical', 'Technical', 'Digital Governance', 'Behavioural/Managerial'];
 
@@ -174,13 +174,7 @@ export async function recordCompetencyScore(
   return updated;
 }
 
-/** Per-competency gaps for competencies the learner has actually been assessed on (not all 33 defaulted to 0). */
-export async function computeGaps(learnerId: string): Promise<CompetencyGap[]> {
-  const learner = await getLearner(learnerId);
-  if (!learner) return [];
-  const expected = getExpectedLevels(learner.jobRole);
-  const scores = await getLearnerScores(learnerId);
-
+function gapsAgainstExpectedLevels(scores: Record<string, CompetencyScore>, expected: Record<string, number>): CompetencyGap[] {
   return Object.values(scores)
     .map((s) => {
       const def = getCompetency(s.competencyId);
@@ -197,6 +191,26 @@ export async function computeGaps(learnerId: string): Promise<CompetencyGap[]> {
     })
     .filter((g): g is CompetencyGap => g !== null)
     .sort((a, b) => b.gap - a.gap);
+}
+
+/** Per-competency gaps for competencies the learner has actually been assessed on, against their CURRENT jobRole. */
+export async function computeGaps(learnerId: string): Promise<CompetencyGap[]> {
+  const learner = await getLearner(learnerId);
+  if (!learner) return [];
+  const scores = await getLearnerScores(learnerId);
+  return gapsAgainstExpectedLevels(scores, getExpectedLevels(learner.jobRole));
+}
+
+/**
+ * Same shape as computeGaps, but against an arbitrary role's expected levels —
+ * used for the "For your career path" section, computed against
+ * LearnerProfile.targetRole instead of the learner's current jobRole.
+ * getExpectedLevels() already falls back to the 'ISS Probationer' baseline for
+ * an unrecognized role string, so this never throws on a bad/missing role.
+ */
+export async function computeGapsAgainstRole(learnerId: string, role: string): Promise<CompetencyGap[]> {
+  const scores = await getLearnerScores(learnerId);
+  return gapsAgainstExpectedLevels(scores, getExpectedLevels(role));
 }
 
 export function unassessedCompetencies(scores: Record<string, CompetencyScore>) {
@@ -270,23 +284,46 @@ export interface EmployeeDashboardData {
   domainAverages: DomainAverage[];
   gaps: CompetencyGap[];
   unassessed: { id: string; domain: CompetencyDomain; name: string }[];
-  recommendations: { competencyId: string; gap: number; course: ReturnType<typeof getCourseById> }[];
+  recommendations: ReturnType<typeof recommendCourses>;
+  /** "For your career path" — only populated when the learner has a targetRole set (see LearnerProfile.targetRole). */
+  careerPathRecommendations: ReturnType<typeof recommendCourses>;
   learningHoursLogged: number;
   coursesCompleted: number;
   coursesEnrolled: number;
   progressHistory: ProgressPoint[];
 }
 
+/** completedCourseIds + recentCompetencyIds (last ~30 days) for one learner — feeds the "previous learning history" / "variety" recommendation factors. Never throws: an unreadable enrolments store just yields empty sets. */
+async function learnerHistorySets(learnerId: string): Promise<{ completedCourseIds: Set<string>; recentCompetencyIds: Set<string> }> {
+  try {
+    const enrolments = await listEnrolments(learnerId);
+    const completed = enrolments.filter((e) => e.status === 'completed');
+    const completedCourseIds = new Set(completed.map((e) => e.courseId));
+    const thirtyDaysAgo = Date.now() - 30 * 86400000;
+    const recentCompetencyIds = new Set<string>();
+    for (const e of completed) {
+      if (!e.completedAt || new Date(e.completedAt).getTime() < thirtyDaysAgo) continue;
+      const course = getCourseById(e.courseId);
+      if (course) recentCompetencyIds.add(course.competencyId);
+    }
+    return { completedCourseIds, recentCompetencyIds };
+  } catch (err) {
+    console.error('Failed to build learner history sets, falling back to empty:', err);
+    return { completedCourseIds: new Set(), recentCompetencyIds: new Set() };
+  }
+}
+
 /** Everything the Employee Dashboard (Section 5) needs, computed server-side in one call. */
 export async function getEmployeeDashboardData(learnerId: string): Promise<EmployeeDashboardData> {
   const learner = await getLearner(learnerId);
   if (!learner) {
-    return { domainAverages: [], gaps: [], unassessed: [], recommendations: [], learningHoursLogged: 0, coursesCompleted: 0, coursesEnrolled: 0, progressHistory: [] };
+    return { domainAverages: [], gaps: [], unassessed: [], recommendations: [], careerPathRecommendations: [], learningHoursLogged: 0, coursesCompleted: 0, coursesEnrolled: 0, progressHistory: [] };
   }
 
   const expected = getExpectedLevels(learner.jobRole);
   const scores = await getLearnerScores(learnerId);
   const gaps = await computeGaps(learnerId);
+  const { completedCourseIds, recentCompetencyIds } = await learnerHistorySets(learnerId);
 
   const domainAverages: DomainAverage[] = DOMAINS.map((domain) => {
     const domainCompetencies = COMPETENCIES.filter((c) => c.domain === domain);
@@ -298,7 +335,23 @@ export async function getEmployeeDashboardData(learnerId: string): Promise<Emplo
 
   const unassessed = unassessedCompetencies(scores).map((c) => ({ id: c.id, domain: c.domain, name: c.name }));
 
-  const recommendations = recommendCoursesForGaps(gaps).slice(0, 6).map((r) => ({ ...r, course: getCourseById(r.course.id) }));
+  const recommendations = recommendCourses({ gaps, department: learner.department, completedCourseIds, recentCompetencyIds });
+
+  // "For your career path" — only computed when targetRole is set AND differs
+  // from the current jobRole (identical roles would just duplicate the gaps
+  // list above). Missing targetRole is the normal case, not an error.
+  let careerPathRecommendations: ReturnType<typeof recommendCourses> = [];
+  if (learner.targetRole && learner.targetRole !== learner.jobRole) {
+    try {
+      const targetGaps = await computeGapsAgainstRole(learnerId, learner.targetRole);
+      careerPathRecommendations = recommendCourses({
+        gaps: targetGaps, department: learner.department, isCareerPath: true, completedCourseIds, recentCompetencyIds,
+      });
+    } catch (err) {
+      console.error('Failed to compute career-path recommendations, omitting section:', err);
+      careerPathRecommendations = [];
+    }
+  }
 
   const enrolments = await listEnrolments(learnerId);
   const coursesCompleted = enrolments.filter((e) => e.status === 'completed').length;
@@ -321,7 +374,7 @@ export async function getEmployeeDashboardData(learnerId: string): Promise<Emplo
     return { timestamp: entry.timestamp, averageScore };
   });
 
-  return { domainAverages, gaps, unassessed, recommendations, learningHoursLogged, coursesCompleted, coursesEnrolled, progressHistory };
+  return { domainAverages, gaps, unassessed, recommendations, careerPathRecommendations, learningHoursLogged, coursesCompleted, coursesEnrolled, progressHistory };
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +394,16 @@ export interface OrgCompetencyGap {
   learnersBelowExpected: number;
 }
 
+export interface LearnerBreakdownRow {
+  id: string;
+  name: string;
+  role: LearnerProfile['role'];
+  department: string;
+  jobRole: string;
+  competencyScores: { competencyId: string; name: string; score: number }[];
+  completedCourses: { courseId: string; title: string; completedAt: string }[];
+}
+
 export interface AdminDashboardData {
   totalLearners: number;
   domainDistribution: OrgDomainDistribution[];
@@ -349,6 +412,52 @@ export interface AdminDashboardData {
   totalCompleted: number;
   completionRate: number;
   capacityNote: string;
+  learnerBreakdown: LearnerBreakdownRow[];
+}
+
+/**
+ * Per-employee breakdown for the Admin Dashboard table — each learner's scores
+ * and completed courses. Every lookup here is defensive: a score referencing a
+ * competency no longer in the taxonomy, or an enrolment referencing a course id
+ * no longer in the catalogue, is skipped rather than crashing the whole table
+ * (a stale/edited reference shouldn't take down the entire dashboard).
+ */
+async function getLearnerBreakdown(): Promise<LearnerBreakdownRow[]> {
+  const learners = await listLearners();
+  const allScores = await readAllScores();
+  const allEnrolments = await readAllEnrolments();
+
+  return learners.map((learner) => {
+    const state = allScores.find((s) => s.learnerId === learner.id);
+    const competencyScores = state
+      ? Object.values(state.scores)
+          .map((s) => {
+            const def = getCompetency(s.competencyId);
+            return def ? { competencyId: s.competencyId, name: def.name, score: s.score } : null;
+          })
+          .filter((s): s is { competencyId: string; name: string; score: number } => s !== null)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [];
+
+    const completedCourses = allEnrolments
+      .filter((e) => e.learnerId === learner.id && e.status === 'completed' && e.completedAt)
+      .map((e) => {
+        const course = getCourseById(e.courseId);
+        return course ? { courseId: e.courseId, title: course.title, completedAt: e.completedAt as string } : null;
+      })
+      .filter((c): c is { courseId: string; title: string; completedAt: string } => c !== null)
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+
+    return {
+      id: learner.id,
+      name: learner.name,
+      role: learner.role,
+      department: learner.department,
+      jobRole: learner.jobRole,
+      competencyScores,
+      completedCourses,
+    };
+  });
 }
 
 /**
@@ -422,5 +531,13 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
     capacityNote = `At the current pace (${recentCompletions} course completions in the last 30 days), closing the ${openGapCount} open learner-competency gaps org-wide would take roughly ${monthsToClose} more month${monthsToClose === 1 ? '' : 's'} — a simple heuristic projection, not a statistical forecast.`;
   }
 
-  return { totalLearners: learners.length, domainDistribution, emergingGaps, totalEnrolments, totalCompleted, completionRate, capacityNote };
+  let learnerBreakdown: LearnerBreakdownRow[] = [];
+  try {
+    learnerBreakdown = await getLearnerBreakdown();
+  } catch (err) {
+    console.error('Failed to build per-employee breakdown, admin dashboard will show an empty table:', err);
+    learnerBreakdown = [];
+  }
+
+  return { totalLearners: learners.length, domainDistribution, emergingGaps, totalEnrolments, totalCompleted, completionRate, capacityNote, learnerBreakdown };
 }

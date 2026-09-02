@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Target, Clock, TrendingUp, GraduationCap, Loader2, AlertTriangle } from 'lucide-react';
+import { Target, Clock, TrendingUp, GraduationCap, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useLearner } from '../context/LearnerContext';
-import type { CompetencyDomain } from '../../server/competency/types';
+import type { CompetencyDomain, RecommendationFactor } from '../../server/competency/types';
+import type { Section } from '../types';
+import { requestCourseScroll } from '../utils/courseNavigation';
 
 interface DomainAverage { domain: CompetencyDomain; actual: number; expected: number; assessedCount: number }
 interface GapRow { competencyId: string; domain: CompetencyDomain; name: string; actual: number; expected: number; gap: number }
-interface Recommendation { competencyId: string; gap: number; course: { title: string; provider: string } | null }
+interface Recommendation { competencyId: string; gap: number; course: { id: string; title: string; provider: string } | null; score: number; factors: RecommendationFactor[] }
 interface ProgressPoint { timestamp: string; averageScore: number }
 interface DashboardData {
   domainAverages: DomainAverage[];
   gaps: GapRow[];
   unassessed: { id: string; domain: CompetencyDomain; name: string }[];
   recommendations: Recommendation[];
+  careerPathRecommendations: Recommendation[];
   learningHoursLogged: number;
   coursesCompleted: number;
   coursesEnrolled: number;
@@ -25,29 +28,51 @@ const DOMAIN_SHORT: Record<CompetencyDomain, string> = {
   'Behavioural/Managerial': 'Behavioural',
 };
 
-export default function EmployeeDashboard() {
+export default function EmployeeDashboard({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const { activeLearner } = useLearner();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [domainFilter, setDomainFilter] = useState<CompetencyDomain>('Statistical');
 
   useEffect(() => {
     if (!activeLearner) return;
     setLoading(true);
+    setLoadError(null);
     fetch(`/api/dashboard/employee/${activeLearner.id}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('The server had trouble loading your dashboard.');
+        return res.json();
+      })
       .then(setData)
-      .catch(() => setData(null))
+      .catch((err) => {
+        console.error('Failed to load employee dashboard:', err);
+        setLoadError(err.message || 'Could not load your dashboard right now. Please try again.');
+        setData(null);
+      })
       .finally(() => setLoading(false));
   }, [activeLearner]);
+
+  const goToCourse = (courseId: string) => {
+    requestCourseScroll(courseId);
+    onNavigate('learning');
+  };
 
   const domainGaps = useMemo(() => (data?.gaps || []).filter((g) => g.domain === domainFilter), [data, domainFilter]);
 
   if (!activeLearner) {
     return <div className="h-full flex items-center justify-center text-center text-zinc-600"><p className="text-xs uppercase tracking-widest font-bold">Create or select a learner profile first.</p></div>;
   }
-  if (loading || !data) {
+  if (loading) {
     return <div className="h-full flex items-center justify-center text-zinc-600"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  }
+  if (loadError || !data) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center gap-3">
+        <AlertTriangle className="w-8 h-8 text-red-500" />
+        <p className="text-xs uppercase tracking-widest font-bold text-red-400">{loadError || 'Could not load your dashboard.'}</p>
+      </div>
+    );
   }
 
   const totalAssessed = data.domainAverages.reduce((s, d) => s + d.assessedCount, 0);
@@ -94,24 +119,52 @@ export default function EmployeeDashboard() {
         </Panel>
       </div>
 
-      <Panel title="Recommended Learning Paths" subtitle="Top gaps, mapped to the mock course catalogue">
+      <Panel title="Recommended Learning Paths" subtitle="Top gaps, mapped to the mock course catalogue — click a card to view it in Learning Paths">
         {data.recommendations.length === 0 ? (
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold text-center py-6">No open gaps right now.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {data.recommendations.map((r) => (
-              <div key={r.competencyId} className="p-3 border border-zinc-800 bg-black flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-zinc-200 truncate">{r.course?.title}</p>
-                  <p className="text-[9px] text-zinc-600 uppercase tracking-widest">{r.course?.provider}</p>
-                </div>
-                <span className="text-[9px] font-bold text-pink-400 bg-pink-500/10 border border-pink-500/30 px-2 py-0.5 uppercase tracking-widest shrink-0">Gap {r.gap}</span>
-              </div>
-            ))}
+            {data.recommendations.map((r) => <RecommendationCard key={r.competencyId} rec={r} onClick={goToCourse} />)}
           </div>
         )}
       </Panel>
+
+      {data.careerPathRecommendations.length > 0 && (
+        <div className="mt-6">
+          <Panel title="For Your Career Path" subtitle={`Toward ${activeLearner.targetRole || 'your target role'} — click a card to view it in Learning Paths`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {data.careerPathRecommendations.map((r) => <RecommendationCard key={r.competencyId} rec={r} onClick={goToCourse} />)}
+            </div>
+          </Panel>
+        </div>
+      )}
     </div>
+  );
+}
+
+function RecommendationCard({ rec, onClick }: { rec: Recommendation; onClick: (courseId: string) => void }) {
+  if (!rec.course) {
+    // Recommendations are computed fresh server-side every load and can never
+    // legitimately have a null course — this guard exists purely so a future
+    // data-shape change fails visibly instead of crashing the whole dashboard.
+    return null;
+  }
+  const courseId = rec.course.id;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(courseId)}
+      className="p-3 border border-zinc-800 bg-black flex items-center justify-between gap-3 text-left hover:border-pink-500/60 hover:bg-zinc-950 transition-colors group"
+    >
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-zinc-200 truncate">{rec.course.title}</p>
+        <p className="text-[9px] text-zinc-600 uppercase tracking-widest">{rec.course.provider}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[9px] font-bold text-pink-400 bg-pink-500/10 border border-pink-500/30 px-2 py-0.5 uppercase tracking-widest">Gap {rec.gap}</span>
+        <ArrowRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-pink-400 group-hover:translate-x-0.5 transition-all" />
+      </div>
+    </button>
   );
 }
 

@@ -22,8 +22,9 @@ import { logAttempt, findRecurringStruggle, getDashboardStats } from './server/m
 import { classifyConcept, generatePracticeNudge } from './server/mistakes/practiceNudge';
 import * as competencyStore from './server/competency/store';
 import { COMPETENCIES, JOB_ROLES, getExpectedLevels } from './server/competency/taxonomy';
-import { recommendCoursesForGaps, getCoursesForCompetency } from './server/competency/catalogue';
+import { getCoursesForCompetency, getCourseById } from './server/competency/catalogue';
 import { extractDocumentText } from './server/materials/extractDocumentText';
+import { generateAssessment, AssessmentDifficulty } from './server/competency/generateAssessment';
 
 // Attempt to load nerdamer extensions if available
 try {
@@ -571,7 +572,7 @@ app.get('/api/learners/:id', async (req, res) => {
 
 app.post('/api/learners', async (req, res) => {
   try {
-    const { name, designation, department, jobRole, currentAssignment, qualifications, workExperienceYears, priorTrainings, role, language } = req.body;
+    const { name, designation, department, jobRole, targetRole, currentAssignment, qualifications, workExperienceYears, priorTrainings, role, language } = req.body;
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'Name is required.' });
     }
@@ -583,6 +584,9 @@ app.post('/api/learners', async (req, res) => {
       designation: String(designation || '').trim(),
       department: String(department || '').trim(),
       jobRole: String(jobRole || '').trim(),
+      // Optional — omitted entirely (not stored as '') when not provided, so it
+      // reads as genuinely absent everywhere else in the app.
+      ...(targetRole && String(targetRole).trim() ? { targetRole: String(targetRole).trim() } : {}),
       currentAssignment: String(currentAssignment || '').trim(),
       qualifications: String(qualifications || '').trim(),
       workExperienceYears: Number(workExperienceYears) || 0,
@@ -676,73 +680,34 @@ app.post('/api/competency/extract-material', async (req, res) => {
   }
 });
 
-// Rescoped version of /api/quiz (server.ts:336): same Groq call and JSON contract,
-// but the prompt is scoped to specific competencies instead of a free-text topic,
-// and each question is tagged with which competency it tests — so one assessment
-// session can cover several competencies at once and still yield a per-competency
-// score, not just one aggregate score (Section 2's explicit requirement).
+// Rescoped version of /api/quiz (server.ts:336): scoped to specific
+// competencies instead of a free-text topic, each question tagged with which
+// competency it tests — so one assessment session can cover several
+// competencies at once and still yield a per-competency score (Section 2). The
+// actual generation (difficulty scaling, the >=10 question floor, and the
+// Groq-retry-then-Gemini-fallback crash-proofing) lives in
+// server/competency/generateAssessment.ts.
 app.post('/api/competency/assess', async (req, res) => {
   try {
-    const { competencyIds, language = 'English', questionsPerCompetency = 2, materialText } = req.body;
+    const { competencyIds, language = 'English', difficulty = 'Medium', materialText } = req.body;
     if (!Array.isArray(competencyIds) || competencyIds.length === 0) {
       return res.status(400).json({ error: 'At least one competencyId is required.' });
     }
     const defs = competencyIds
       .map((id: string) => COMPETENCIES.find((c) => c.id === id))
-      .filter((c: any) => c);
+      .filter((c): c is typeof COMPETENCIES[number] => Boolean(c));
     if (defs.length === 0) {
       return res.status(400).json({ error: 'No valid competencyIds provided.' });
     }
+    const validDifficulty: AssessmentDifficulty = ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium';
 
-    const groq = getGroq();
-    const competencyList = defs.map((c: any) => `- id: "${c.id}", name: "${c.name}", domain: "${c.domain}"`).join('\n');
-
-    const materialClause = materialText
-      ? `\n\nBase the questions on the following uploaded material where relevant to each competency (this is real training material provided by the user — mine it for actual content, don't just generate generic questions and ignore it):\n"""\n${String(materialText).slice(0, 12000)}\n"""`
-      : '';
-
-    const prompt = `Generate a competency assessment quiz for officials in India's Official Statistical System (MoSPI). Cover EXACTLY these competencies, ${questionsPerCompetency} question(s) each:
-${competencyList}${materialClause}
-
-Every question must be written entirely in ${language}, with correct grammar and correct native technical terminology (transliterate only internationally standard terms/symbols that have no ${language} equivalent).
-Each question must test real understanding of its specific competency (not a generic "what is X" question) and include exactly 4 options, one correct answer index (0-based), and a substantive explanation of why the correct answer is right.
-
-Return ONLY valid JSON with this exact structure, no prose outside the JSON:
-{
-  "title": "Short title for this assessment, in ${language}",
-  "questions": [
-    { "question": "...", "options": ["...", "...", "...", "..."], "correctAnswer": 0, "explanation": "...", "competencyId": "one of the ids listed above" }
-  ]
-}`;
-
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: 'user', content: prompt }],
-      model: 'openai/gpt-oss-120b',
-      temperature: 0.4,
-      response_format: { type: 'json_object' },
-    });
-
-    const raw = completion.choices[0]?.message?.content || '{}';
-    let parsed: any;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return res.status(502).json({ error: 'The assessment generator returned malformed output. Please try again.' });
-    }
-
-    const validIds = new Set(defs.map((c: any) => c.id));
-    const questions = (Array.isArray(parsed.questions) ? parsed.questions : []).filter(
-      (q: any) => q && typeof q.question === 'string' && Array.isArray(q.options) && q.options.length === 4 && validIds.has(q.competencyId)
-    );
-
-    if (questions.length === 0) {
-      return res.status(502).json({ error: 'Could not generate a valid assessment for these competencies. Please try again.' });
-    }
-
-    res.json({ title: parsed.title || 'Competency Assessment', questions });
+    const result = await generateAssessment({ defs, language, difficulty: validDifficulty, materialText: materialText ? String(materialText) : undefined });
+    res.json(result);
   } catch (error: any) {
     console.error('Competency assessment generation error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate assessment' });
+    // generateAssessment() already tried Groq twice and Gemini once — this is
+    // the final, honest "we couldn't do it" message, not a raw stack trace.
+    res.status(502).json({ error: error.message || "Couldn't generate the assessment right now. Please try again." });
   }
 });
 
@@ -771,12 +736,26 @@ app.get('/api/courses', (req, res) => {
   res.json({ courses: getCoursesForCompetency(competencyId) });
 });
 
+// Existence check for a single course id — used by LearningPaths.tsx to tell
+// "this course id was removed/renamed from the catalogue" (course-unavailable
+// state) apart from "it exists but isn't currently recommended" when a
+// dashboard card's deep link no longer resolves on the page.
+app.get('/api/courses/id/:id', (req, res) => {
+  const course = getCourseById(req.params.id);
+  if (!course) return res.status(404).json({ error: 'Course not found' });
+  res.json({ course });
+});
+
+// Multi-factor recommendations (gap, department priority, career path, emerging
+// tech, and learning-history/variety) — see server/competency/catalogue.ts's
+// recommendCourses() header comment for the full breakdown. Reuses the same
+// computation as the Employee Dashboard so the two screens never disagree.
 app.get('/api/recommendations/:learnerId', async (req, res) => {
   try {
-    const gaps = await competencyStore.computeGaps(req.params.learnerId);
-    const recommendations = recommendCoursesForGaps(gaps);
-    res.json({ recommendations });
+    const data = await competencyStore.getEmployeeDashboardData(req.params.learnerId);
+    res.json({ recommendations: data.recommendations, careerPathRecommendations: data.careerPathRecommendations });
   } catch (error: any) {
+    console.error('Failed to compute recommendations:', error);
     res.status(500).json({ error: error.message || 'Failed to compute recommendations' });
   }
 });

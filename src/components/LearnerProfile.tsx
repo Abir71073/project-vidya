@@ -15,6 +15,7 @@ export default function LearnerProfilePage() {
   const [designation, setDesignation] = useState('');
   const [department, setDepartment] = useState('');
   const [jobRole, setJobRole] = useState('');
+  const [targetRole, setTargetRole] = useState('');
   const [currentAssignment, setCurrentAssignment] = useState('');
   const [qualifications, setQualifications] = useState('');
   const [workExperienceYears, setWorkExperienceYears] = useState('');
@@ -34,7 +35,7 @@ export default function LearnerProfilePage() {
   }, [learners.length, loading]);
 
   const resetForm = () => {
-    setName(''); setDesignation(''); setDepartment(''); setJobRole('');
+    setName(''); setDesignation(''); setDepartment(''); setJobRole(''); setTargetRole('');
     setCurrentAssignment(''); setQualifications(''); setWorkExperienceYears('');
     setPriorTrainings(''); setRole('employee'); setLanguage('English');
   };
@@ -50,6 +51,10 @@ export default function LearnerProfilePage() {
         designation: designation.trim(),
         department: department.trim(),
         jobRole,
+        // Empty select = "no career goal stated" -> omit the field entirely
+        // rather than storing an empty string, so the recommendation engine's
+        // `learner.targetRole && ...` check treats it as genuinely absent.
+        ...(targetRole ? { targetRole } : {}),
         currentAssignment: currentAssignment.trim(),
         qualifications: qualifications.trim(),
         workExperienceYears: Number(workExperienceYears) || 0,
@@ -96,6 +101,7 @@ export default function LearnerProfilePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <ProfileField icon={<Building2 className="w-3.5 h-3.5" />} label="Department" value={activeLearner.department} />
             <ProfileField icon={<Briefcase className="w-3.5 h-3.5" />} label="Job Role" value={activeLearner.jobRole} />
+            <ProfileField icon={<Briefcase className="w-3.5 h-3.5" />} label="Target Role" value={activeLearner.targetRole || 'None set'} />
             <ProfileField icon={<Briefcase className="w-3.5 h-3.5" />} label="Current Assignment" value={activeLearner.currentAssignment} />
             <ProfileField icon={<GraduationCap className="w-3.5 h-3.5" />} label="Qualifications" value={activeLearner.qualifications} />
             <ProfileField icon={<Briefcase className="w-3.5 h-3.5" />} label="Work Experience" value={`${activeLearner.workExperienceYears} years`} />
@@ -152,6 +158,12 @@ export default function LearnerProfilePage() {
               <select value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="ipt">
                 <option value="">Select a role...</option>
                 {jobRoles.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </Field>
+            <Field label="Target Role (optional — for career-path recommendations)">
+              <select value={targetRole} onChange={(e) => setTargetRole(e.target.value)} className="ipt">
+                <option value="">No target role set</option>
+                {jobRoles.filter((r) => r !== jobRole).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </Field>
             <Field label="Current Assignment">

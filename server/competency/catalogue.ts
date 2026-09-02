@@ -1,4 +1,5 @@
-import { Course } from './types';
+import { Course, CourseRecommendation, RecommendationFactor } from './types';
+import { getDepartmentPriorities } from './taxonomy';
 
 // ============================================================================
 // DEMO INTEGRATION — NOT CONNECTED TO LIVE iGOT KARMAYOGI / NSSTA APIs.
@@ -34,10 +35,10 @@ const IGOT_COURSES: Course[] = [
   { id: 'igot-stata', competencyId: 'stata', title: 'Stata for Survey Data Analysis', provider: 'iGOT Karmayogi', durationHours: 16, level: 'Intermediate', description: 'Survey-weighted regression and tabulation workflows in Stata.' },
   { id: 'igot-spss', competencyId: 'spss', title: 'SPSS for Applied Statistical Analysis', provider: 'iGOT Karmayogi', durationHours: 14, level: 'Foundation', description: 'Descriptive and inferential analysis of official survey microdata in SPSS.' },
   { id: 'igot-sas', competencyId: 'sas', title: 'SAS Programming for Large-Scale Data Processing', provider: 'iGOT Karmayogi', durationHours: 18, level: 'Intermediate', description: 'Batch processing and validation of large administrative data extracts in SAS.' },
-  { id: 'igot-gis', competencyId: 'gis', title: 'GIS for Spatial Statistics', provider: 'iGOT Karmayogi', durationHours: 16, level: 'Intermediate', description: 'Mapping survey frames and small-area estimates using QGIS.' },
+  { id: 'igot-gis', competencyId: 'gis', title: 'GIS for Spatial Statistics', provider: 'iGOT Karmayogi', durationHours: 16, level: 'Intermediate', description: 'Mapping survey frames and small-area estimates using QGIS.', emergingTech: true },
   { id: 'igot-dataviz', competencyId: 'data-visualization', title: 'Data Visualization for Policy Communication', provider: 'iGOT Karmayogi', durationHours: 10, level: 'Foundation', description: 'Designing clear dashboards and charts for non-technical policy audiences.' },
-  { id: 'igot-ai-ml', competencyId: 'ai-ml', title: 'AI/ML Applications in Official Statistics', provider: 'iGOT Karmayogi', durationHours: 24, level: 'Advanced', description: 'Applying machine learning to data imputation, anomaly detection, and nowcasting.' },
-  { id: 'igot-cloud', competencyId: 'cloud-computing', title: 'Cloud Computing Fundamentals for Public Sector', provider: 'iGOT Karmayogi', durationHours: 12, level: 'Foundation', description: 'Core cloud concepts (compute, storage, IAM) for government data platforms.' },
+  { id: 'igot-ai-ml', competencyId: 'ai-ml', title: 'AI/ML Applications in Official Statistics', provider: 'iGOT Karmayogi', durationHours: 24, level: 'Advanced', description: 'Applying machine learning to data imputation, anomaly detection, and nowcasting.', emergingTech: true },
+  { id: 'igot-cloud', competencyId: 'cloud-computing', title: 'Cloud Computing Fundamentals for Public Sector', provider: 'iGOT Karmayogi', durationHours: 12, level: 'Foundation', description: 'Core cloud concepts (compute, storage, IAM) for government data platforms.', emergingTech: true },
   { id: 'igot-apis', competencyId: 'apis', title: 'Building & Consuming Government Data APIs', provider: 'iGOT Karmayogi', durationHours: 14, level: 'Intermediate', description: 'REST API design for statistical data dissemination services.' },
   { id: 'igot-open-data', competencyId: 'open-data', title: 'Open Government Data Publishing', provider: 'iGOT Karmayogi', durationHours: 8, level: 'Foundation', description: 'Publishing datasets to data.gov.in under open-data licensing and formats.' },
 
@@ -95,14 +96,79 @@ export function getCourseById(courseId: string): Course | undefined {
   return ALL_COURSES.find((c) => c.id === courseId);
 }
 
-/** Top course recommendation for each gap, largest gap first, one per competency. */
-export function recommendCoursesForGaps(gaps: { competencyId: string; gap: number }[]): { competencyId: string; gap: number; course: Course }[] {
-  return gaps
-    .filter((g) => g.gap > 0)
-    .map((g) => {
-      const courses = getCoursesForCompetency(g.competencyId);
-      const course = courses.find((c) => c.provider === 'iGOT Karmayogi') || courses[0];
-      return course ? { competencyId: g.competencyId, gap: g.gap, course } : null;
-    })
-    .filter((r): r is { competencyId: string; gap: number; course: Course } => r !== null);
+export interface RecommendCoursesOptions {
+  gaps: { competencyId: string; gap: number }[];
+  /** Learner's department (free text) — looked up against DEPARTMENT_PRIORITIES; missing/unrecognized is fine, contributes no boost. */
+  department?: string | null;
+  /** When true, tags the base factor 'career-path' instead of 'gap' — used for the "For your career path" section built from gaps computed against targetRole. */
+  isCareerPath?: boolean;
+  /** Course ids the learner has already completed — hard-excluded so a finished course is never re-recommended. */
+  completedCourseIds?: Set<string>;
+  /** Competency ids covered by a completion in roughly the last 30 days — recommendations for OTHER competencies get a small variety boost. */
+  recentCompetencyIds?: Set<string>;
+  limit?: number;
+}
+
+/**
+ * Multi-factor course recommendations. Every factor below is optional input —
+ * missing department/targetRole/history data degrades gracefully to gap-only
+ * scoring rather than throwing, since a learner profile is not guaranteed to
+ * have all of these fields set (see LearnerProfile.targetRole in types.ts).
+ *
+ * Factors weighed (score is additive, gap size is the base):
+ *   1. Gap size (or, for the career-path list, gap against targetRole's expected levels)
+ *   2. Previous learning history — already-completed courses are excluded outright
+ *   3. Departmental priorities — small boost if this competency is a stated priority for the learner's department
+ *   4. Future job requirements — via the separate isCareerPath list (see server/competency/store.ts's computeGapsAgainstRole)
+ *   5. Emerging technologies — small boost for courses tagged emergingTech
+ *   6. Variety — small boost for competencies not recently covered by a completion
+ */
+export function recommendCourses(opts: RecommendCoursesOptions): CourseRecommendation[] {
+  const {
+    gaps,
+    department = null,
+    isCareerPath = false,
+    completedCourseIds = new Set<string>(),
+    recentCompetencyIds = new Set<string>(),
+    limit = 6,
+  } = opts;
+
+  // getDepartmentPriorities already never throws on an unrecognized/missing
+  // department (returns []), but this whole function is still defensive about
+  // every optional input in case that contract ever changes.
+  let priorities: Set<string>;
+  try {
+    priorities = new Set(getDepartmentPriorities(department));
+  } catch {
+    priorities = new Set();
+  }
+
+  const scored: CourseRecommendation[] = [];
+  for (const g of gaps) {
+    if (!g || typeof g.gap !== 'number' || g.gap <= 0 || !g.competencyId) continue;
+
+    const candidates = getCoursesForCompetency(g.competencyId).filter((c) => !completedCourseIds.has(c.id));
+    if (candidates.length === 0) continue; // every course for this competency is already completed — nothing to recommend
+    const course = candidates.find((c) => c.provider === 'iGOT Karmayogi') || candidates[0];
+
+    let score = g.gap;
+    const factors: RecommendationFactor[] = [isCareerPath ? 'career-path' : 'gap'];
+
+    if (priorities.has(g.competencyId)) {
+      score += 20;
+      factors.push('department-priority');
+    }
+    if (course.emergingTech) {
+      score += 10;
+      factors.push('emerging-tech');
+    }
+    if (!recentCompetencyIds.has(g.competencyId)) {
+      score += 5;
+      factors.push('variety');
+    }
+
+    scored.push({ competencyId: g.competencyId, gap: g.gap, course, score, factors });
+  }
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, Math.max(0, limit));
 }

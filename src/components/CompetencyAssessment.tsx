@@ -6,6 +6,8 @@ import { useLearner } from '../context/LearnerContext';
 import type { CompetencyDefinition, CompetencyDomain } from '../../server/competency/types';
 
 const DOMAINS: CompetencyDomain[] = ['Statistical', 'Technical', 'Digital Governance', 'Behavioural/Managerial'];
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard'] as const;
+type Difficulty = (typeof DIFFICULTIES)[number];
 
 interface CompetencyResult {
   competencyId: string;
@@ -19,6 +21,7 @@ export default function CompetencyAssessment() {
   const { activeLearner, refresh } = useLearner();
   const [taxonomy, setTaxonomy] = useState<CompetencyDefinition[]>([]);
   const [domain, setDomain] = useState<CompetencyDomain>('Statistical');
+  const [difficulty, setDifficulty] = useState<Difficulty>('Medium');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +90,7 @@ export default function CompetencyAssessment() {
         body: JSON.stringify({
           competencyIds: [...selected],
           language: activeLearner.language || 'English',
+          difficulty,
           ...(materialText ? { materialText } : {}),
         }),
       });
@@ -182,7 +186,7 @@ export default function CompetencyAssessment() {
           </div>
           <div>
             <h2 className="text-3xl font-['Bebas_Neue'] tracking-widest text-zinc-100 uppercase drop-shadow-[0_0_10px_rgba(236,72,153,0.3)]">Competency Assessment</h2>
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Pick a few competencies to assess in this sitting.</p>
+            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Pick competencies and a difficulty — at least 10 questions per assessment.</p>
           </div>
         </div>
 
@@ -193,6 +197,20 @@ export default function CompetencyAssessment() {
               key={d}
               onClick={() => setDomain(d)}
               className={`flex-1 min-w-[120px] py-2 text-[10px] font-bold tracking-widest uppercase transition-all ${domain === d ? 'bg-zinc-900 text-orange-500 border border-zinc-800' : 'text-zinc-600 hover:text-zinc-400'}`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+
+        <label className="block text-[10px] font-bold text-pink-500 uppercase tracking-widest mb-2">Difficulty</label>
+        <div className="flex bg-black border border-zinc-900 p-1 mb-5">
+          {DIFFICULTIES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDifficulty(d)}
+              className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-all ${difficulty === d ? 'bg-zinc-900 text-orange-500 border border-zinc-800' : 'text-zinc-600 hover:text-zinc-400'}`}
             >
               {d}
             </button>

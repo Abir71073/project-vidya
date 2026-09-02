@@ -17,6 +17,8 @@ export interface LearnerProfile {
   workExperienceYears: number;
   priorTrainings: string[];
   role: LearnerRole;
+  /** Optional. A jobRole key the learner is working toward — drives the "For your career path" recommendation section. Absent for learners with no stated career goal; never assumed present. */
+  targetRole?: string;
   /** Preferred language for quizzes/assistant replies — same three the rest of the app supports. */
   language: string;
   createdAt: string;
@@ -69,6 +71,19 @@ export interface Course {
   durationHours: number;
   description: string;
   level: CourseLevel;
+  /** Optional. Flags courses in emerging-technology areas (AI/ML, Cloud, GIS, ...) for a small recommendation boost. Absent means false. */
+  emergingTech?: boolean;
+}
+
+/** A human-readable tag for why a course was recommended — shown in the UI so scoring is never a black box. */
+export type RecommendationFactor = 'gap' | 'department-priority' | 'career-path' | 'emerging-tech' | 'variety';
+
+export interface CourseRecommendation {
+  competencyId: string;
+  gap: number;
+  course: Course;
+  score: number;
+  factors: RecommendationFactor[];
 }
 
 export type EnrolmentStatus = 'enrolled' | 'completed';

@@ -43,7 +43,7 @@ export default function App() {
           {currentSection === 'profile' && <PageTransition sectionId="profile"><LearnerProfilePage /></PageTransition>}
           {currentSection === 'assessment' && <PageTransition sectionId="assessment"><CompetencyAssessment /></PageTransition>}
           {currentSection === 'learning' && <PageTransition sectionId="learning"><LearningPaths /></PageTransition>}
-          {currentSection === 'dashboard' && <PageTransition sectionId="dashboard"><EmployeeDashboard /></PageTransition>}
+          {currentSection === 'dashboard' && <PageTransition sectionId="dashboard"><EmployeeDashboard onNavigate={setCurrentSection} /></PageTransition>}
           {currentSection === 'admin' && <PageTransition sectionId="admin"><AdminDashboard /></PageTransition>}
           {currentSection === 'assistant' && <PageTransition sectionId="assistant"><Assistant /></PageTransition>}
         </AnimatePresence>
