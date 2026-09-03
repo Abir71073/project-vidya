@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Users, TrendingUp, AlertOctagon, Loader2, ShieldAlert, Lightbulb, ChevronDown, ChevronUp, GraduationCap, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, TrendingUp, AlertOctagon, Loader2, ShieldAlert, Lightbulb, ChevronDown, ChevronUp, GraduationCap, AlertTriangle, Sparkles, Check, X, ScrollText, RefreshCw } from 'lucide-react';
 import { useLearner } from '../context/LearnerContext';
-import type { CompetencyDomain, LearnerRole } from '../../server/competency/types';
+import type { CompetencyDomain, LearnerRole, Suggestion, WeeklyDigest, SuggestionType } from '../../server/competency/types';
 
 interface OrgDomainDistribution { domain: CompetencyDomain; averageScore: number; learnersAssessed: number }
 interface OrgCompetencyGap { competencyId: string; domain: CompetencyDomain; name: string; averageGap: number; learnersBelowExpected: number }
@@ -230,6 +230,10 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <div className="mt-8">
+        <AgenticInsightsPanel requesterId={activeLearner.id} learnerNames={new Map(data.learnerBreakdown.map((r) => [r.id, r.name]))} />
+      </div>
     </div>
   );
 }
@@ -242,6 +246,248 @@ function StatTile({ icon, value, label, accent }: { icon: React.ReactNode; value
       <div className={`w-8 h-8 flex items-center justify-center border mb-3 ${accentClass}`}>{icon}</div>
       <p className="text-3xl font-['Bebas_Neue'] tracking-wider text-zinc-100">{value}</p>
       <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">{label}</p>
+    </div>
+  );
+}
+
+const TYPE_LABELS: Record<SuggestionType, string> = {
+  'recommend-course': 'Recommend Course',
+  'flag-checkin': 'Flag for Check-In',
+  'recognize-performer': 'Recognize Performer',
+};
+
+/**
+ * AI Insights & Suggestions — the human-in-the-loop review surface. The AI
+ * (server/competency/agenticAdmin.ts) only ever proposes; every Suggestion
+ * here sits at 'pending' until this admin explicitly clicks Approve or
+ * Dismiss. Its own fetch/error state is deliberately isolated from the rest
+ * of AdminDashboard — a failure here (shown as "insights temporarily
+ * unavailable") must never affect the aggregate charts or per-employee table
+ * above it, which already loaded successfully by the time this mounts.
+ */
+function AgenticInsightsPanel({ requesterId, learnerNames }: { requesterId: string; learnerNames: Map<string, string> }) {
+  const [digest, setDigest] = useState<WeeklyDigest | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [auditLog, setAuditLog] = useState<Suggestion[] | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [digestRes, suggRes] = await Promise.all([
+        fetch(`/api/admin/digest/latest?requesterId=${requesterId}`),
+        fetch(`/api/admin/suggestions?requesterId=${requesterId}&status=pending`),
+      ]);
+      const digestData = await digestRes.json();
+      const suggData = await suggRes.json();
+      setDigest(digestData.digest || null);
+      setUnavailable(digestData.error || null);
+      setSuggestions(suggData.suggestions || []);
+    } catch (err) {
+      console.error('Failed to load AI insights (rest of the dashboard is unaffected):', err);
+      setUnavailable('Insights are temporarily unavailable.');
+    } finally {
+      setLoading(false);
+    }
+  }, [requesterId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch('/api/admin/digest/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId }),
+      });
+      const data = await res.json();
+      setUnavailable(data.error || null);
+      if (data.digest) {
+        // Only replace the shown digest on an actual new one — on failure,
+        // data.digest is null and we deliberately leave the last successful
+        // digest on screen (with the unavailable banner above it), rather
+        // than calling the general load() here, which re-fetches
+        // /api/admin/digest/latest (a plain read, no AI call) and would
+        // silently overwrite this exact error message with null the moment
+        // it resolves — the bug this comment is here to stop from coming back.
+        setDigest(data.digest);
+        const suggRes = await fetch(`/api/admin/suggestions?requesterId=${requesterId}&status=pending`);
+        const suggData = await suggRes.json();
+        setSuggestions(suggData.suggestions || []);
+      }
+    } catch (err) {
+      console.error('Digest generation failed (rest of the dashboard is unaffected):', err);
+      setUnavailable('Insights are temporarily unavailable — please try again shortly.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const act = async (id: string, action: 'approve' | 'dismiss') => {
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/admin/suggestions/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterId }),
+      });
+      if (!res.ok) throw new Error(`Failed to ${action} suggestion`);
+      await load();
+    } catch (err) {
+      console.error(`Failed to ${action} suggestion:`, err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const loadAuditLog = async () => {
+    if (auditLog) {
+      setAuditLog(null); // toggle closed
+      return;
+    }
+    setAuditLoading(true);
+    try {
+      const res = await fetch(`/api/admin/suggestions?requesterId=${requesterId}&status=all`);
+      const data = await res.json();
+      setAuditLog(data.suggestions || []);
+    } catch (err) {
+      console.error('Failed to load audit log:', err);
+      setAuditLog([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  const nameFor = (id: string) => learnerNames.get(id) || 'Unknown learner';
+
+  return (
+    <div className="relative bg-zinc-950/80 backdrop-blur-md border border-zinc-800/80 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_25px_50px_-20px_rgba(0,0,0,0.9)]">
+      <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink" />
+      <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
+        <div>
+          <h3 className="font-['Bebas_Neue'] tracking-widest text-lg text-zinc-100 uppercase flex items-center gap-2"><Sparkles className="w-4 h-4 text-pink-500" /> AI Insights & Suggestions</h3>
+          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">The AI only proposes — every suggestion needs your explicit approval to take effect</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadAuditLog} className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 border border-zinc-800 px-2.5 py-1.5">
+            <ScrollText className="w-3.5 h-3.5" /> {auditLog ? 'Hide' : 'View'} Audit Log
+          </button>
+          <button onClick={generate} disabled={generating} className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-pink-400 bg-pink-500/10 border border-pink-500/30 px-2.5 py-1.5 hover:bg-pink-500/20 transition-colors disabled:opacity-50">
+            {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} {generating ? 'Analyzing...' : 'Generate Digest'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8 text-zinc-600"><Loader2 className="w-5 h-5 animate-spin" /></div>
+      ) : unavailable && !digest ? (
+        <div className="mt-4 flex items-start gap-2 p-3 bg-zinc-900/60 border border-zinc-800 text-zinc-500">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-orange-500" />
+          <p className="text-xs">{unavailable} The rest of this dashboard is unaffected.</p>
+        </div>
+      ) : !digest ? (
+        <p className="mt-6 text-[10px] text-zinc-600 uppercase tracking-widest font-bold text-center py-6">No digest generated yet — click "Generate Digest" to analyze current learner data.</p>
+      ) : (
+        <>
+          {unavailable && (
+            <div className="mt-4 mb-2 flex items-start gap-2 p-2.5 bg-zinc-900/60 border border-zinc-800 text-zinc-500">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-orange-500" />
+              <p className="text-[11px]">{unavailable} Showing the last successful digest below.</p>
+            </div>
+          )}
+          <p className="text-[9px] text-zinc-600 uppercase tracking-widest mt-4 mb-2">Digest generated {new Date(digest.generatedAt).toLocaleString()}</p>
+
+          {digest.insights.length === 0 ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold text-center py-6">No notable insights in this digest.</p>
+          ) : (
+            <div className="space-y-2 mb-6">
+              {digest.insights.map((insight, i) => (
+                <div key={i} className="p-3 border border-zinc-800 bg-black">
+                  <p className="text-xs text-zinc-200 mb-1">{insight.summary}</p>
+                  {insight.dataPoints.length > 0 && (
+                    <ul className="text-[10px] text-zinc-600 list-disc list-inside space-y-0.5">
+                      {insight.dataPoints.map((d, j) => <li key={j}>{d}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Pending Suggestions ({suggestions.length})</p>
+          {suggestions.length === 0 ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold text-center py-6">No pending suggestions right now.</p>
+          ) : (
+            <div className="space-y-3">
+              {suggestions.map((s) => {
+                const busy = busyId === s.id;
+                return (
+                  <div key={s.id} className="p-3 border border-zinc-800 bg-black">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-200">{nameFor(s.learnerId)}</p>
+                        <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-1.5 py-0.5 uppercase tracking-widest">{TYPE_LABELS[s.type]}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => act(s.id, 'approve')} disabled={busy} className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-green-400 bg-green-500/10 border border-green-500/30 px-2 py-1.5 hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Approve
+                        </button>
+                        <button onClick={() => act(s.id, 'dismiss')} disabled={busy} className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-1.5 hover:border-red-500/50 hover:text-red-400 transition-colors disabled:opacity-50">
+                          <X className="w-3 h-3" /> Dismiss
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-1.5">{s.reasoning}</p>
+                    {s.dataPoints.length > 0 && (
+                      <ul className="text-[10px] text-zinc-600 list-disc list-inside space-y-0.5">
+                        {s.dataPoints.map((d, j) => <li key={j}>{d}</li>)}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {auditLog !== null && (
+        <div className="mt-6 pt-4 border-t border-zinc-900">
+          <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-3">Audit Log — every suggestion ever generated ({auditLog.length})</p>
+          {auditLoading ? (
+            <div className="flex items-center justify-center py-6 text-zinc-600"><Loader2 className="w-4 h-4 animate-spin" /></div>
+          ) : auditLog.length === 0 ? (
+            <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold text-center py-6">No suggestions generated yet.</p>
+          ) : (
+            <div className="divide-y divide-zinc-900 max-h-96 overflow-y-auto custom-scrollbar">
+              {auditLog.map((s) => (
+                <div key={s.id} className="py-2.5 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-zinc-300">{nameFor(s.learnerId)} <span className="text-zinc-600">· {TYPE_LABELS[s.type]}</span></p>
+                    <p className="text-[9px] text-zinc-600">{s.reasoning}</p>
+                    <p className="text-[9px] text-zinc-700 mt-0.5">
+                      Created {new Date(s.createdAt).toLocaleString()}
+                      {s.reviewedAt && <> · Reviewed {new Date(s.reviewedAt).toLocaleString()} by {nameFor(s.reviewedBy || '') || s.reviewedBy}</>}
+                    </p>
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 border shrink-0 ${
+                    s.status === 'approved' ? 'text-green-400 border-green-500/30 bg-green-500/10' :
+                    s.status === 'dismissed' ? 'text-zinc-500 border-zinc-800 bg-zinc-900' :
+                    'text-orange-400 border-orange-500/30 bg-orange-500/10'
+                  }`}>{s.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

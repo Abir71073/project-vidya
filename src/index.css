@@ -64,11 +64,33 @@ html.a11y-dyslexia-font div {
   font-family: 'Lexend', sans-serif;
 }
 
-/* Hide scrollbar for clean cinematic areas */
-::-webkit-scrollbar {
-  display: none;
-}
+/* Every scrollable area gets a visible, thin, theme-matching scrollbar by
+   default — app-wide, not opt-in. This used to be the reverse (hidden
+   everywhere, a .custom-scrollbar class opted specific panels back in), which
+   meant every page's own internal scroll container (each page component wraps
+   its content in its own `overflow-y-auto` div, independent of Layout.tsx's
+   outer one) silently had no visible affordance that it scrolled at all —
+   real users had no way to discover a page had more content below the fold.
+   .custom-scrollbar is kept below as a harmless alias so any element that
+   explicitly opted in earlier keeps working unchanged. */
 * {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #ec4899;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
 }

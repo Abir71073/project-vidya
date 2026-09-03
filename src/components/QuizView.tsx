@@ -132,7 +132,14 @@ export default function QuizView({ quiz, onBack, onComplete, language = 'English
         </span>
       </div>
 
-      <div className="p-6 sm:p-8 flex-1 overflow-y-auto bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-overlay bg-black/40">
+      {/* min-h-0 is load-bearing here: a flex child defaults to min-height: auto,
+          so without it this div grows to fit all its content (question +
+          explanation + video) instead of being capped by the parent's height —
+          overflow-y-auto then has nothing to actually scroll, and the excess
+          gets silently clipped by the ancestor chain's overflow-hidden
+          (Layout.tsx's <main> and the root shell), making the video
+          unreachable. min-h-0 lets this div actually respect flex-1 and scroll. */}
+      <div className="p-6 sm:p-8 flex-1 min-h-0 overflow-y-auto custom-scrollbar bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-overlay bg-black/40">
         <h3 className="text-xl font-['Bebas_Neue'] tracking-wide text-zinc-100 mb-8 leading-tight drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{question.question}</h3>
 
         <div className="space-y-4">

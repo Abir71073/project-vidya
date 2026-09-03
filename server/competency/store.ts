@@ -541,3 +541,79 @@ export async function getAdminDashboardData(): Promise<AdminDashboardData> {
 
   return { totalLearners: learners.length, domainDistribution, emergingGaps, totalEnrolments, totalCompleted, completionRate, capacityNote, learnerBreakdown };
 }
+
+// ---------------------------------------------------------------------------
+// Agentic Admin Assistant — analytics snapshot for the weekly digest.
+
+export interface LearnerAnalyticsSnapshot {
+  learnerId: string;
+  /** Included only as a label so the AI's output and the admin UI can address
+   *  the right learner by name — never used as an analytical input itself. */
+  displayName: string;
+  /** Organizational grouping (for "department-level gaps"), not demographic. */
+  department: string;
+  competencyScores: { competencyId: string; name: string; domain: CompetencyDomain; score: number; trend: number[] }[];
+  gaps: CompetencyGap[];
+  daysSinceLastActivity: number | null;
+  completedCourseCount: number;
+}
+
+/**
+ * FAIRNESS CONSTRAINT (hard requirement): this snapshot is the ONLY data the
+ * digest's AI prompt ever sees about a learner. It is built as an explicit
+ * whitelist of competency/engagement fields — score, gap, activity recency,
+ * completion count, and department (an organizational grouping the digest
+ * explicitly needs for "department-level gaps", not a demographic attribute).
+ * It must NEVER include any demographic field (age, gender, etc.), even if one
+ * is added to LearnerProfile in the future — do not widen this whitelist to
+ * spread the rest of the profile into the snapshot; add fields one at a time
+ * and ask "is this competency/engagement data, or something else about the
+ * person" before including anything new.
+ */
+export async function getAnalyticsSnapshot(): Promise<LearnerAnalyticsSnapshot[]> {
+  const learners = await listLearners();
+  const allScores = await readAllScores();
+  const allEnrolments = await readAllEnrolments();
+
+  const snapshots: LearnerAnalyticsSnapshot[] = [];
+  for (const learner of learners) {
+    const state = allScores.find((s) => s.learnerId === learner.id);
+    const scores = state?.scores || {};
+    const gaps = await computeGaps(learner.id);
+    const learnerEnrolments = allEnrolments.filter((e) => e.learnerId === learner.id);
+
+    const competencyScores = Object.values(scores)
+      .map((s) => {
+        const def = getCompetency(s.competencyId);
+        if (!def) return null;
+        return {
+          competencyId: s.competencyId,
+          name: def.name,
+          domain: def.domain,
+          score: s.score,
+          trend: s.history.map((h) => h.score),
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
+
+    const activityTimestamps = [
+      ...Object.values(scores).flatMap((s) => s.history.map((h) => h.timestamp)),
+      ...learnerEnrolments.map((e) => e.enrolledAt),
+      ...learnerEnrolments.filter((e) => e.completedAt).map((e) => e.completedAt as string),
+    ];
+    const daysSinceLastActivity = activityTimestamps.length
+      ? Math.floor((Date.now() - Math.max(...activityTimestamps.map((t) => new Date(t).getTime()))) / 86400000)
+      : null;
+
+    snapshots.push({
+      learnerId: learner.id,
+      displayName: learner.name,
+      department: learner.department,
+      competencyScores,
+      gaps,
+      daysSinceLastActivity,
+      completedCourseCount: learnerEnrolments.filter((e) => e.status === 'completed').length,
+    });
+  }
+  return snapshots;
+}

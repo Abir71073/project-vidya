@@ -166,7 +166,18 @@ export default function Layout({ children, currentSection, onNavigate }: LayoutP
           </div>
         </header>
 
-        <div className="ambient-surface flex-1 overflow-y-auto p-4 sm:p-6 relative">
+        {/* min-h-0 is load-bearing (same fix as QuizView.tsx's result panel):
+            without it this flex child defaults to min-height: auto and grows to
+            fit every page's full content instead of being capped at the
+            available height, so overflow-y-auto has nothing to actually scroll
+            and the excess gets silently clipped by <main>'s overflow-hidden
+            above. This is the ONE container every page (Home, Assessment,
+            Learning Paths, both dashboards, etc.) renders {children} through,
+            so fixing it here fixes scrolling app-wide. custom-scrollbar makes
+            that scrolling visible too — this app hides scrollbars globally by
+            design (index.css), which left every page's scroll with no visual
+            affordance at all. */}
+        <div className="ambient-surface flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4 sm:p-6 relative">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
           <div className="h-full relative z-10">
             {children}

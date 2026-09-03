@@ -96,3 +96,44 @@ export interface Enrolment {
   enrolledAt: string;
   completedAt?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Agentic Admin Assistant — the AI here only ever PROPOSES; every consequential
+// action requires an explicit human Approve. A Suggestion record is never
+// deleted once created — its status/reviewedAt/reviewedBy fields are updated
+// in place, so the full list of Suggestion records IS the permanent audit log
+// (see server/competency/agenticAdmin.ts's header comment).
+
+export type SuggestionType = 'recommend-course' | 'flag-checkin' | 'recognize-performer';
+export type SuggestionStatus = 'pending' | 'approved' | 'dismissed';
+
+export interface Suggestion {
+  id: string;
+  learnerId: string;
+  type: SuggestionType;
+  reasoning: string;
+  /** Concrete data points backing the reasoning, e.g. "Survey Design score fell from 72 to 45 across 3 assessments." Never a vague claim with nothing behind it. */
+  dataPoints: string[];
+  /** Only set when type === 'recommend-course' — resolved server-side against the real catalogue, never trusted from the AI's own output. */
+  suggestedCourseId?: string;
+  status: SuggestionStatus;
+  createdAt: string;
+  /** Which digest run produced this suggestion. */
+  digestId: string;
+  reviewedAt?: string;
+  /** The reviewing administrator's learnerId. */
+  reviewedBy?: string;
+}
+
+export interface DigestInsight {
+  summary: string;
+  learnerIds: string[];
+  dataPoints: string[];
+}
+
+export interface WeeklyDigest {
+  id: string;
+  generatedAt: string;
+  insights: DigestInsight[];
+  suggestionIds: string[];
+}

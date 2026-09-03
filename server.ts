@@ -25,6 +25,7 @@ import { COMPETENCIES, JOB_ROLES, getExpectedLevels } from './server/competency/
 import { getCoursesForCompetency, getCourseById } from './server/competency/catalogue';
 import { extractDocumentText } from './server/materials/extractDocumentText';
 import { generateAssessment, AssessmentDifficulty } from './server/competency/generateAssessment';
+import { generateDigest, getLatestDigest, listAllSuggestions, listPendingSuggestions, approveSuggestion, dismissSuggestion } from './server/competency/agenticAdmin';
 
 // Attempt to load nerdamer extensions if available
 try {
@@ -860,6 +861,87 @@ app.get('/api/dashboard/admin', async (req, res) => {
     res.json(data);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to load admin dashboard data' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Agentic Admin Assistant. Every route below requires the same admin-role
+// check as /api/dashboard/admin. The AI here only ever proposes — see
+// server/competency/agenticAdmin.ts's header comment for the human-in-the-loop
+// boundary and the fairness constraint on what data the prompt is allowed to see.
+async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
+  const requesterId = String(req.query.requesterId || req.body?.requesterId || '');
+  const requester = requesterId ? await competencyStore.getLearner(requesterId) : null;
+  if (!requester || requester.role !== 'administrator') {
+    res.status(403).json({ error: 'Administrator access required.' });
+    return null;
+  }
+  return requesterId;
+}
+
+app.get('/api/admin/digest/latest', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const digest = await getLatestDigest();
+    res.json({ digest });
+  } catch (error: any) {
+    console.error('Failed to load latest digest:', error);
+    // Crash-proofing: this must never take the rest of the Admin Dashboard down —
+    // respond 200 with a null digest and let the client show "insights
+    // temporarily unavailable" rather than surfacing a 500 here.
+    res.json({ digest: null, error: 'Insights are temporarily unavailable.' });
+  }
+});
+
+app.post('/api/admin/digest/generate', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const digest = await generateDigest();
+    if (!digest) {
+      return res.json({ digest: null, error: 'Insights are temporarily unavailable — please try again shortly.' });
+    }
+    res.json({ digest });
+  } catch (error: any) {
+    console.error('Digest generation error:', error);
+    res.json({ digest: null, error: 'Insights are temporarily unavailable — please try again shortly.' });
+  }
+});
+
+app.get('/api/admin/suggestions', async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const status = String(req.query.status || 'pending');
+    const suggestions = status === 'all' ? await listAllSuggestions() : await listPendingSuggestions();
+    res.json({ suggestions });
+  } catch (error: any) {
+    console.error('Failed to list suggestions:', error);
+    res.status(500).json({ error: error.message || 'Failed to load suggestions' });
+  }
+});
+
+app.post('/api/admin/suggestions/:id/approve', async (req, res) => {
+  try {
+    const requesterId = await requireAdmin(req, res);
+    if (!requesterId) return;
+    const result = await approveSuggestion(req.params.id, requesterId);
+    if (!result) return res.status(404).json({ error: 'Suggestion not found' });
+    res.json(result);
+  } catch (error: any) {
+    console.error('Failed to approve suggestion:', error);
+    res.status(500).json({ error: error.message || 'Failed to approve suggestion' });
+  }
+});
+
+app.post('/api/admin/suggestions/:id/dismiss', async (req, res) => {
+  try {
+    const requesterId = await requireAdmin(req, res);
+    if (!requesterId) return;
+    const suggestion = await dismissSuggestion(req.params.id, requesterId);
+    if (!suggestion) return res.status(404).json({ error: 'Suggestion not found' });
+    res.json({ suggestion });
+  } catch (error: any) {
+    console.error('Failed to dismiss suggestion:', error);
+    res.status(500).json({ error: error.message || 'Failed to dismiss suggestion' });
   }
 });
 
