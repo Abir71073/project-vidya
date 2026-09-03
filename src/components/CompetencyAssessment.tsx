@@ -142,7 +142,7 @@ export default function CompetencyAssessment() {
   }
 
   if (quiz && !results) {
-    return <QuizView quiz={quiz} onBack={() => setQuiz(null)} onComplete={handleComplete} />;
+    return <QuizView quiz={quiz} onBack={() => setQuiz(null)} onComplete={handleComplete} language={activeLearner.language || 'English'} />;
   }
 
   if (results) {

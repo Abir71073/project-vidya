@@ -261,13 +261,15 @@ app.post('/api/examiner/grade', async (req, res) => {
   }
 });
 
-app.post('/api/doubt/video', async (req, res) => {
-  const { explanation, mathExpression, language = 'English' } = req.body;
-
-  if (!explanation || typeof explanation !== 'string' || !explanation.trim()) {
-    return res.status(400).json({ error: 'Please provide an explanation to turn into a video.' });
-  }
-
+/**
+ * Shared video-generation pipeline: script -> narration -> slide render -> ffmpeg
+ * stitch. Used by both the legacy (nav-dormant) Doubt Solver video route and
+ * Section 5's on-demand per-question quiz explanation — reusing this instead of
+ * duplicating the orchestration, per "reuse the existing pipeline, don't rebuild it."
+ * Throws on any failure; the caller is responsible for the user-facing fallback
+ * (see /api/competency/question-video below, which falls back to text on the client).
+ */
+async function generateExplanationVideo(explanation: string, mathExpression: string | undefined, language: string): Promise<{ videoPath: string; title: string; steps: number }> {
   const videoId = randomUUID();
   const workDir = path.join(GENERATED_DIR, 'videos', videoId);
   const voice = voiceForLanguage(language);
@@ -300,14 +302,53 @@ app.post('/api/doubt/video', async (req, res) => {
     await assembleVideo(stepClips, workDir, outPath);
     await fs.rm(rawVideoDir, { recursive: true, force: true }).catch(() => {});
 
-    res.json({
-      videoPath: `/generated/videos/${videoId}/video.mp4`,
-      title: script.title,
-      steps: script.steps.length,
-    });
+    return { videoPath: `/generated/videos/${videoId}/video.mp4`, title: script.title, steps: script.steps.length };
+  } catch (error) {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+app.post('/api/doubt/video', async (req, res) => {
+  const { explanation, mathExpression, language = 'English' } = req.body;
+
+  if (!explanation || typeof explanation !== 'string' || !explanation.trim()) {
+    return res.status(400).json({ error: 'Please provide an explanation to turn into a video.' });
+  }
+
+  try {
+    const result = await generateExplanationVideo(explanation, mathExpression, language);
+    res.json(result);
   } catch (error: any) {
     console.error('Video generation error:', error);
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    res.status(500).json({ error: error.message || 'Failed to generate the video explanation.' });
+  }
+});
+
+// Section 5: on-demand video explanation for a single quiz question, generated
+// only when the learner clicks "Watch Video Explanation" (not automatically for
+// every question in an assessment). Synthesizes a short explanation narrative
+// from the question + correct answer + existing text explanation, then reuses
+// the exact same pipeline as /api/doubt/video above. Crash-proofing: this route
+// still throws a clean error on failure (missing ffmpeg/edge-tts/Playwright, a
+// TTS failure, etc.) — QuizView.tsx is the piece that actually falls back to the
+// always-visible text explanation rather than getting stuck.
+app.post('/api/competency/question-video', async (req, res) => {
+  try {
+    const { question, options, correctAnswer, explanation, language = 'English' } = req.body;
+    if (!question || !Array.isArray(options) || typeof correctAnswer !== 'number' || !explanation) {
+      return res.status(400).json({ error: 'question, options, correctAnswer, and explanation are required.' });
+    }
+    const correctOption = options[correctAnswer];
+    if (typeof correctOption !== 'string') {
+      return res.status(400).json({ error: 'correctAnswer does not index a valid option.' });
+    }
+
+    const narrative = `Question: ${question}\n\nCorrect Answer: ${correctOption}\n\nExplanation: ${explanation}`;
+    const result = await generateExplanationVideo(narrative, undefined, String(language));
+    res.json(result);
+  } catch (error: any) {
+    console.error('Question video generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate the video explanation.' });
   }
 });

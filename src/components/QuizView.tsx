@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Quiz, QuizQuestion } from '../types';
-import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Video, Loader2, AlertTriangle } from 'lucide-react';
 
 export interface QuizAnswerRecord {
   question: QuizQuestion;
@@ -15,9 +15,14 @@ interface QuizViewProps {
    *  caller (e.g. CompetencyAssessment.tsx) can tally results per competencyId without
    *  QuizView itself needing to know anything about competencies. */
   onComplete?: (result: { score: number; total: number; answers: QuizAnswerRecord[] }) => void;
+  /** Language for the on-demand video explanation (Section 5). Defaults to English for
+   *  older call sites (e.g. the legacy QuizGenerator.tsx) that don't pass one. */
+  language?: string;
 }
 
-export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
+type VideoState = 'idle' | 'loading' | 'ready' | 'error';
+
+export default function QuizView({ quiz, onBack, onComplete, language = 'English' }: QuizViewProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -25,7 +30,19 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
   const [finished, setFinished] = useState(false);
   const answersRef = useRef<QuizAnswerRecord[]>([]);
 
+  const [videoState, setVideoState] = useState<VideoState>('idle');
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   const question = quiz.questions[currentQuestion];
+
+  // Video explanation is per-question and on-demand — never carry state from
+  // one question into the next.
+  useEffect(() => {
+    setVideoState('idle');
+    setVideoUrl(null);
+    setVideoError(null);
+  }, [currentQuestion]);
 
   const handleSelect = (index: number) => {
     if (showExplanation) return;
@@ -35,6 +52,36 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
     answersRef.current.push({ question, selectedIndex: index, correct });
     if (correct) {
       setScore(s => s + 1);
+    }
+  };
+
+  const watchExplanation = async () => {
+    setVideoState('loading');
+    setVideoError(null);
+    try {
+      const res = await fetch('/api/competency/question-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: question.question,
+          options: question.options,
+          correctAnswer: question.correctAnswer,
+          explanation: question.explanation,
+          language,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.videoPath) throw new Error(data.error || 'Video generation failed.');
+      setVideoUrl(data.videoPath);
+      setVideoState('ready');
+    } catch (err: any) {
+      console.error('Video explanation failed, falling back to text:', err);
+      // Crash-proofing (Section 5): never leave the learner on a broken/spinning
+      // player. The text explanation above is already visible regardless of
+      // this state, so "falling back" here just means: stop trying, say why,
+      // and leave the rest of the result screen exactly as usable as before.
+      setVideoError(err.message || "Couldn't generate a video explanation right now — see the text explanation above.");
+      setVideoState('error');
     }
   };
 
@@ -74,7 +121,7 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
     <div className="max-w-2xl mx-auto bg-zinc-950/90 backdrop-blur-md border border-zinc-800/80 overflow-hidden flex flex-col h-full shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_30px_60px_-25px_rgba(0,0,0,0.9)]">
       <div className="p-3 sm:p-4 border-b border-zinc-900 flex items-center justify-between bg-black shrink-0 relative">
         <div className="absolute top-0 left-0 right-0 h-px panel-accent-pink" />
-        <button 
+        <button
           onClick={onBack}
           className="flex items-center text-zinc-500 hover:text-pink-500 transition-colors text-[10px] uppercase font-bold tracking-widest"
         >
@@ -87,13 +134,13 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
 
       <div className="p-6 sm:p-8 flex-1 overflow-y-auto bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-blend-overlay bg-black/40">
         <h3 className="text-xl font-['Bebas_Neue'] tracking-wide text-zinc-100 mb-8 leading-tight drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">{question.question}</h3>
-        
+
         <div className="space-y-4">
           {question.options.map((option, idx) => {
             const isSelected = selectedOption === idx;
             const isCorrect = idx === question.correctAnswer;
             let btnClass = "w-full text-left p-4 rounded-none border transition-all flex items-center justify-between text-sm ";
-            
+
             if (!showExplanation) {
               btnClass += "border-zinc-800 bg-black hover:border-pink-500 hover:text-pink-400 text-zinc-300";
             } else if (isCorrect) {
@@ -105,7 +152,7 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
             }
 
             return (
-              <button 
+              <button
                 key={idx}
                 onClick={() => handleSelect(idx)}
                 disabled={showExplanation}
@@ -124,6 +171,44 @@ export default function QuizView({ quiz, onBack, onComplete }: QuizViewProps) {
             <div className="absolute top-0 left-0 w-1 h-full bg-pink-500"></div>
             <h4 className="text-[10px] font-bold text-pink-500 mb-2 uppercase tracking-widest ml-2">Intel / Explanation</h4>
             <p className="text-zinc-300 text-sm leading-relaxed ml-2">{question.explanation}</p>
+
+            <div className="mt-4 ml-2">
+              {videoState === 'idle' && (
+                <button
+                  type="button"
+                  onClick={watchExplanation}
+                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-cyan-400 bg-cyan-500/10 border border-cyan-500/30 px-3 py-2 hover:bg-cyan-500/20 transition-colors"
+                >
+                  <Video className="w-3.5 h-3.5" /> Watch Video Explanation
+                </button>
+              )}
+              {videoState === 'loading' && (
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating video explanation — this can take up to a minute...
+                </div>
+              )}
+              {videoState === 'error' && (
+                <div className="flex items-start gap-2 text-[10px] text-zinc-500 bg-zinc-950 border border-zinc-800 px-3 py-2 max-w-md">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-orange-500" />
+                  <span>{videoError}</span>
+                </div>
+              )}
+              {videoState === 'ready' && videoUrl && (
+                <video
+                  src={videoUrl}
+                  controls
+                  autoPlay
+                  className="w-full max-w-md border border-zinc-800 mt-1"
+                  onError={() => {
+                    // The generated file itself failed to play back (e.g. a
+                    // corrupt/partial encode) — same graceful fallback as a
+                    // failed generation request, not a broken player left on screen.
+                    setVideoState('error');
+                    setVideoError("The generated video couldn't be played — see the text explanation above.");
+                  }}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
