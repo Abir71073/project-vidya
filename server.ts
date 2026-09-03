@@ -348,8 +348,13 @@ app.post('/api/competency/question-video', async (req, res) => {
     const result = await generateExplanationVideo(narrative, undefined, String(language));
     res.json(result);
   } catch (error: any) {
+    // Log the real cause server-side (could be a Groq/Gemini auth error,
+    // missing ffmpeg/edge-tts/Playwright binary, TTS failure, etc.) but never
+    // forward that raw provider/system error text to the client — QuizView.tsx
+    // shows this string directly next to the always-visible text explanation,
+    // so it needs to stay a clean, honest sentence, not a leaked stack/API error.
     console.error('Question video generation error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate the video explanation.' });
+    res.status(500).json({ error: "Couldn't generate a video explanation right now — see the text explanation above." });
   }
 });
 
